@@ -233,11 +233,11 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   return (
     <section 
       ref={scrollContainerRef}
-      className="flex-1 overflow-y-auto bg-studio-bg/60 flex flex-col items-center scroll-smooth pt-8 pb-32 relative transition-all duration-500"
+      className="flex-1 overflow-y-auto bg-studio-bg/60 flex flex-col items-center scroll-smooth pb-32 relative transition-all duration-500"
     >
       
       {/* 1. STICKY TOOLBAR */}
-      <div className="sticky top-8 mb-8 flex items-center gap-1.5 bg-white/90 backdrop-blur-xl border border-studio-border rounded-[22px] p-1.5 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] z-50 ring-1 ring-black/5 animate-in slide-in-from-top-4 duration-500">
+      <div className="sticky top-4 flex items-center gap-1.5 bg-white/90 backdrop-blur-xl border border-studio-border rounded-[22px] p-1.5 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] z-50 ring-1 ring-black/5 animate-in slide-in-from-top-4 duration-500">
         <div className="flex items-center gap-0.5 pr-1.5 border-r border-studio-border">
           <ToolbarButton onClick={() => (editor.chain().focus() as any).undo().run()} icon="undo" label="撤销" />
           <ToolbarButton onClick={() => (editor.chain().focus() as any).redo().run()} icon="redo" label="重做" />

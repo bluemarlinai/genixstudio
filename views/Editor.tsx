@@ -106,13 +106,17 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
   const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
   const [aiConfigError, setAiConfigError] = useState<string | null>(null);
 
+  const [isGeneratingCover, setIsGeneratingCover] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isTitleCopied, setIsTitleCopied] = useState(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit, Bold, Italic, Strike, Code,
       Heading.configure({ levels: [1, 2, 3] }),
       BulletList, OrderedList, ListItem, Blockquote, HorizontalRule,
       Div, SpanMark, Image, 
-      Placeholder.configure({ placeholder: '在此处落笔您的灵感，或者点击左侧“AI创作”快速生成内容...' })
+      Placeholder.configure({ placeholder: '在此处落笔您的灵感，或者点击“AI一键创作”快速生成内容...' })
     ],
     content: '',
     editorProps: { attributes: { class: 'prose prose-sm prose-blue max-w-none focus:outline-none' } },
@@ -166,6 +170,17 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(draft));
   };
 
+  const handleCopyTitle = () => {
+    navigator.clipboard.writeText(title).then(() => {
+      setIsTitleCopied(true);
+      setTimeout(() => setIsTitleCopied(false), 2000);
+    });
+  };
+
+  const handleTitleDoubleClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    e.currentTarget.select();
+  };
+
   const handleGenerateTitles = async () => {
     if (!aiIdea.trim()) return;
     const { apiKey, model } = getAIConfig();
@@ -207,7 +222,8 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       setSummary(result.summary);
       const matchedBg = bgPresets.find(b => b.id === result.suggestedBgId);
       if (matchedBg) setActiveBg(matchedBg);
-      setCoverImage(`https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200`);
+      // 同时触发封面生成
+      handleGenerateCover(selectedTitle, result.summary);
       saveToStorage(result.html);
       setIsAiModalOpen(false);
       setAiIdea('');
@@ -216,6 +232,76 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       console.error(err);
       alert('AI 文章生成失败，请重试。');
     } finally { setAiLoadingStage('IDLE'); }
+  };
+
+  const handleGenerateCover = async (overrideTitle?: string, overrideSummary?: string) => {
+    const currentTitle = overrideTitle || title;
+    const currentSummary = overrideSummary || summary || editor?.getText().slice(0, 100) || "";
+    if (!currentTitle) return;
+
+    const { apiKey } = getAIConfig();
+    if (!apiKey) return;
+
+    setIsGeneratingCover(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      
+      // Step 1: 分析并生成绘图提示词
+      const promptResponse = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Analyze the following article title and summary to create a professional, artistic, and cinematic image generation prompt. 
+        Title: "${currentTitle}"
+        Summary: "${currentSummary}"
+        Requirements: The style should be modern, clean, and high-end editorial. No text in image. Focus on metaphors or symbolic imagery. Output only the English prompt.`,
+      });
+      const visualPrompt = promptResponse.text || currentTitle;
+
+      // Step 2: 调用图像生成模型
+      const imageResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: [{ text: visualPrompt }],
+        config: {
+          imageConfig: {
+            aspectRatio: "16:9",
+          }
+        }
+      });
+
+      for (const part of imageResponse.candidates[0].content.parts) {
+        if (part.inlineData) {
+          const base64Data = part.inlineData.data;
+          setCoverImage(`data:image/png;base64,${base64Data}`);
+          break;
+        }
+      }
+    } catch (err) {
+      console.error("Cover generation failed", err);
+      alert("封面生成失败，请检查 API 状态。");
+    } finally {
+      setIsGeneratingCover(false);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    const content = editor?.getText();
+    if (!content || content.length < 50) return;
+
+    const { apiKey, model } = getAIConfig();
+    if (!apiKey) return;
+
+    setIsGeneratingSummary(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: `请根据以下文章内容，总结一段 100 字以内的摘要，要求语气专业且吸引人阅读：\n\n${content}`,
+      });
+      setSummary(response.text || "");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
   };
 
   const toggleZenMode = () => {
@@ -231,7 +317,22 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-1.5 hover:bg-studio-bg rounded-lg transition-colors text-studio-sub"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button>
           <div className="h-4 w-px bg-studio-border"></div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="bg-transparent border-none text-[11px] font-black text-studio-dark w-[350px] focus:ring-0 p-0" placeholder="文章标题..." />
+          <div className="flex items-center gap-1 group/title">
+            <input 
+              value={title} 
+              onChange={(e) => setTitle(e.target.value)} 
+              onDoubleClick={handleTitleDoubleClick}
+              className="bg-transparent border-none text-[11px] font-black text-studio-dark w-[350px] focus:ring-0 p-0" 
+              placeholder="文章标题..." 
+            />
+            <button 
+              onClick={handleCopyTitle}
+              className={`p-1 rounded-md transition-all ${isTitleCopied ? 'text-emerald-500 bg-emerald-50' : 'text-studio-sub hover:bg-studio-bg hover:text-primary opacity-0 group-hover/title:opacity-100'}`}
+              title="复制标题"
+            >
+              <span className="material-symbols-outlined text-[16px]">{isTitleCopied ? 'done' : 'content_copy'}</span>
+            </button>
+          </div>
         </div>
 
         {/* 禅意模式切换按钮 */}
@@ -278,7 +379,15 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
           <EditorWorkspace editor={editor} activeBg={activeBg} activeBrand={activeBrand} />
         </div>
         <div className={`transition-all duration-500 ease-in-out overflow-hidden border-l border-studio-border bg-white ${isRightCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-[260px] opacity-100'}`}>
-          <RightSidebar coverImage={coverImage} isGeneratingCover={false} onGenerateCover={() => {}} summary={summary} setSummary={setSummary} isGeneratingSummary={false} onGenerateSummary={() => {}} />
+          <RightSidebar 
+            coverImage={coverImage} 
+            isGeneratingCover={isGeneratingCover} 
+            onGenerateCover={() => handleGenerateCover()} 
+            summary={summary} 
+            setSummary={setSummary} 
+            isGeneratingSummary={isGeneratingSummary} 
+            onGenerateSummary={handleGenerateSummary} 
+          />
         </div>
       </div>
 
