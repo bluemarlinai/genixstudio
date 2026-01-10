@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useEditor } from '@tiptap/react';
-import { Node, mergeAttributes } from '@tiptap/core';
+import { Node, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import BubbleMenu from '@tiptap/extension-bubble-menu';
@@ -22,6 +22,38 @@ import LeftSidebar from '../components/editor/LeftSidebar';
 import RightSidebar from '../components/editor/RightSidebar';
 import EditorWorkspace from '../components/editor/EditorWorkspace';
 
+// Define a custom Mark for span tags to handle custom styles like background-color
+const SpanMark = Mark.create({
+  name: 'span',
+  priority: 100,
+  addAttributes() {
+    return {
+      style: {
+        default: null,
+        parseHTML: element => element.getAttribute('style'),
+        renderHTML: attributes => {
+          if (!attributes.style) return {};
+          return { style: attributes.style };
+        },
+      },
+      class: {
+        default: null,
+        parseHTML: element => element.getAttribute('class'),
+        renderHTML: attributes => {
+          if (!attributes.class) return {};
+          return { class: attributes.class };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes), 0];
+  },
+});
+
 const Div = Node.create({
   name: 'div',
   group: 'block',
@@ -36,16 +68,6 @@ const Div = Node.create({
     }]; 
   },
   renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes), 0]; },
-});
-
-const Span = Node.create({
-  name: 'span',
-  group: 'inline',
-  inline: true,
-  content: 'text*', 
-  addAttributes() { return { class: { default: null }, style: { default: null } }; },
-  parseHTML() { return [{ tag: 'span' }]; },
-  renderHTML({ HTMLAttributes }) { return ['span', mergeAttributes(HTMLAttributes), 0]; },
 });
 
 const Image = Node.create({
@@ -230,7 +252,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
       StarterKit, Bold, Italic, Strike, Code, BubbleMenu,
       Heading.configure({ levels: [1, 2, 3] }),
       BulletList, OrderedList, ListItem, Blockquote, HorizontalRule,
-      Div, Span, Image, 
+      Div, SpanMark, Image, 
       Placeholder.configure({ placeholder: '在此处落笔您的灵感...' })
     ],
     content: longContent,
