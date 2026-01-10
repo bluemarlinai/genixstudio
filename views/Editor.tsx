@@ -298,7 +298,9 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
                 )}
               </div>
             )}
-            <p className="text-center text-[9px] text-studio-sub font-bold uppercase tracking-widest">基于 {getAIConfig().model.toUpperCase()} 引擎驱动</p>
+            <p className="text-center text-[9px] text-studio-sub font-bold uppercase tracking-widest">
+              基于 {getAIConfig().model.replace(/-latest|-preview|-reasoner/g, '').toUpperCase()} 引擎驱动
+            </p>
           </div>
         </div>
       )}
