@@ -48,13 +48,6 @@ const ContentList: React.FC<ContentListProps> = ({ onEdit, onCreate }) => {
               placeholder="搜索文章标题..."
             />
           </div>
-          <button 
-            onClick={onCreate}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-[11px] font-black shadow-lg shadow-primary/10 transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            新建文章
-          </button>
         </div>
       </div>
 

@@ -19,7 +19,10 @@ interface DashboardProps {
   onNavigateAnnouncements?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onUpgrade, onNavigateAnnouncements }) => {
+const Dashboard: React.FC<DashboardProps> = ({ 
+  onUpgrade, 
+  onNavigateAnnouncements
+}) => {
   const [showBanner, setShowBanner] = useState(true);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [isLoading, setIsLoading] = useState(true);

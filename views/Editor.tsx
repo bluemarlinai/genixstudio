@@ -87,9 +87,10 @@ interface EditorProps {
   onBack: () => void;
   onPublish: (content: string, title: string, bg: BackgroundPreset, brand: BrandPreset) => void;
   onNavigateUpgrade: () => void;
+  autoOpenAiModal?: boolean;
 }
 
-const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
+const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal }) => {
   const [title, setTitle] = useState('未命名文章');
   const [summary, setSummary] = useState('');
   const [coverImage, setCoverImage] = useState('https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&q=80&w=800');
@@ -99,7 +100,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
   const [activeBg, setActiveBg] = useState<BackgroundPreset>(bgPresets[0]);
   const [activeBrand, setActiveBrand] = useState<BrandPreset>(brandPresets[0]);
   
-  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(autoOpenAiModal || false);
   const [aiIdea, setAiIdea] = useState('');
   const [aiLoadingStage, setAiLoadingStage] = useState<'IDLE' | 'TITLES' | 'GENERATING'>('IDLE');
   const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
@@ -163,11 +164,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
       updatedAt: new Date().getTime()
     };
     localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(draft));
-  };
-
-  const toggleZenMode = () => {
-    setIsLeftCollapsed(!isLeftCollapsed);
-    setIsRightCollapsed(!isRightCollapsed);
   };
 
   const handleGenerateTitles = async () => {
