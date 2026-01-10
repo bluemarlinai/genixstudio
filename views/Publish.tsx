@@ -52,16 +52,17 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
       'blockquote': 'border-left: 4px solid #137fec; padding: 12px 18px; background-color: #f8fafc; color: #666666; margin: 18px 0; border-radius: 8px;',
       'strong': 'color: #1e293b; font-weight: bold !important;',
       'ul': 'list-style-type: disc; margin: 15px 0; padding-left: 25px;',
-      'li': 'margin-bottom: 8px; font-size: 16px; color: #333333;'
+      'li': 'margin-bottom: 8px; font-size: 16px; color: #333333;',
+      // 核心修复：代码块样式
+      'pre': 'background-color: #1e293b; border-radius: 12px; padding: 16px; margin: 20px 0; overflow-x: auto; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; line-height: 1.6; tab-size: 4;',
+      'code': 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; background-color: rgba(30, 41, 59, 0.05); color: #475569; padding: 2px 4px; border-radius: 4px;'
     };
 
-    // 1. 处理底纹背景 (BG Styles) - 修复图片拼接导致的 HTML 源码泄露
+    // 1. 处理底纹背景 (BG Styles)
     const bgStyleObj = bg?.style || {};
     let bgStyleStr = '';
-    
     if (bgStyleObj.background) bgStyleStr += `background: ${bgStyleObj.background};`;
     if (bgStyleObj.backgroundImage) {
-      // 移除可能存在的双引号，统一使用单引号，防止 HTML 属性提前闭合
       const cleanImg = bgStyleObj.backgroundImage.replace(/"/g, "'");
       bgStyleStr += `background-image: ${cleanImg};`;
     }
@@ -78,14 +79,12 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
         style = remToPx(style);
         div.setAttribute('style', `box-sizing: border-box !important; display: block; ${style}`);
       });
-
       const innerPs = block.querySelectorAll('p');
       innerPs.forEach(p => {
         let pStyle = p.getAttribute('style') || '';
         pStyle = remToPx(pStyle);
         p.setAttribute('style', `padding: 0 !important; margin: 0; ${pStyle}`);
       });
-
       let blockStyle = block.getAttribute('style') || '';
       blockStyle = remToPx(blockStyle);
       const section = doc.createElement('section');
@@ -94,31 +93,53 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
       block.parentNode?.replaceChild(section, block);
     });
 
-    // 3. 处理普通标签并应用 styleMap
+    // 3. 处理代码块 (Pre)
+    // 微信对 pre 支持不佳，我们将其转换为 section 以获得更稳定的背景渲染
+    const preNodes = doc.querySelectorAll('pre');
+    preNodes.forEach(pre => {
+      const code = pre.querySelector('code');
+      const codeText = code ? code.innerHTML : pre.innerHTML;
+      const section = doc.createElement('section');
+      // 使用内联样式模拟深色代码背景
+      section.setAttribute('style', styleMap['pre'] + ' display: block; white-space: pre-wrap; word-break: break-all;');
+      section.innerHTML = `<code>${codeText}</code>`;
+      
+      // 内部 code 标签如果是作为 pre 的子级，不应该有背景色（背景由 section 承载）
+      const innerCode = section.querySelector('code');
+      if (innerCode) {
+        innerCode.setAttribute('style', 'background: none !important; color: inherit !important; border: none !important; padding: 0 !important; font-family: inherit !important;');
+      }
+      pre.parentNode?.replaceChild(section, pre);
+    });
+
+    // 4. 处理普通标签并应用 styleMap
     const allElements = doc.body.querySelectorAll('*');
     allElements.forEach(el => {
       const tagName = el.tagName.toLowerCase();
+      // 如果标签已经被转换为 section (例如 pre 转换的)，则跳过 styleMap 默认覆盖
+      if (el.tagName === 'SECTION' && el.getAttribute('style')?.includes('#1e293b')) return;
+
       const baseStyle = styleMap[tagName] || '';
       let existingStyle = el.getAttribute('style') || '';
       existingStyle = remToPx(existingStyle);
+      
       const isProcessed = el.closest('section');
       const finalStyle = isProcessed ? existingStyle : `${baseStyle}; ${existingStyle}`;
       el.setAttribute('style', `box-sizing: border-box !important; max-width: 100% !important; ${finalStyle}`.trim());
       el.removeAttribute('class');
     });
 
-    // 4. 构建最终 HTML - 修正外层容器，彻底解决多余代码显示问题
+    // 构建最终 HTML
     return `<section style="margin: 0; padding: 0; font-family: -apple-system-font,BlinkMacSystemFont,Helvetica Neue,PingFang SC,Hiragino Sans GB,Microsoft YaHei UI,Microsoft YaHei,Arial,sans-serif; width: 100%; box-sizing: border-box; ${bgStyleStr}"><section style="margin: 0; padding: 20px 15px; width: 100%; box-sizing: border-box !important; overflow: hidden; display: block;">${doc.body.innerHTML}<section style="margin: 40px 0 20px; text-align: center; color: #bbbbbb; font-size: 11px; letter-spacing: 2px;"><p style="margin: 0; opacity: 0.5; padding: 0;">POWERED BY GENIX STUDIO</p></section></section></section>`;
   };
 
   /**
-   * 今日头条专属 HTML 处理逻辑 - 遵循扁平化与精简原则
+   * 今日头条专属 HTML 处理逻辑
    */
   const processHtmlForToutiao = (rawHtml: string) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(rawHtml, 'text/html');
     
-    // 今日头条对样式的支持较窄，主要支持基本的文字和间距
     const styleMap: Record<string, string> = {
       'h1': 'font-size: 24px; font-weight: bold; color: #222; margin-top: 24px; margin-bottom: 16px; line-height: 1.4;',
       'h2': 'font-size: 20px; font-weight: bold; color: #222; margin-top: 22px; margin-bottom: 14px; border-left: 4px solid #f85959; padding-left: 10px; line-height: 1.4;',
@@ -126,15 +147,14 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
       'p': 'font-size: 16px; line-height: 1.8; color: #333; margin-top: 16px; margin-bottom: 16px; text-align: justify;',
       'blockquote': 'border-left: 4px solid #e8e8e8; padding: 12px 16px; color: #666; background-color: #f4f5f6; margin: 20px 0;',
       'strong': 'font-weight: bold; color: #000;',
-      'img': 'max-width: 100% !important; height: auto; display: block; margin: 20px auto; border-radius: 4px;'
+      'img': 'max-width: 100% !important; height: auto; display: block; margin: 20px auto; border-radius: 4px;',
+      'pre': 'background-color: #f4f5f6; border-radius: 4px; padding: 15px; margin: 20px 0; font-family: monospace; overflow-x: auto; font-size: 14px;'
     };
 
-    // 头条对 div 嵌套支持较差，将装饰块转化为扁平化的 section 或 p
     const blocks = doc.querySelectorAll('.decoration-block');
     blocks.forEach(block => {
       const flatSection = doc.createElement('section');
       let blockStyle = remToPx(block.getAttribute('style') || '');
-      // 保持简洁的背景色和边距
       flatSection.setAttribute('style', `margin: 20px 0; padding: 16px; background-color: #f8f8f8; border-radius: 8px; ${blockStyle}`);
       flatSection.innerHTML = block.innerHTML;
       block.parentNode?.replaceChild(flatSection, block);
@@ -146,7 +166,7 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
       const baseStyle = styleMap[tagName] || '';
       let existingStyle = remToPx(el.getAttribute('style') || '');
       el.setAttribute('style', `${baseStyle}; ${existingStyle}`.trim());
-      el.removeAttribute('class'); // 今日头条编辑器主要依赖内联 style
+      el.removeAttribute('class');
     });
 
     return `<div>${doc.body.innerHTML}</div>`;
