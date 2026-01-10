@@ -218,14 +218,42 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     } finally { setAiLoadingStage('IDLE'); }
   };
 
+  const toggleZenMode = () => {
+    setIsLeftCollapsed(!isLeftCollapsed);
+    setIsRightCollapsed(!isRightCollapsed);
+  };
+
+  const isZenMode = isLeftCollapsed && isRightCollapsed;
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-studio-bg font-sans overflow-hidden">
       <header className="h-[52px] px-4 bg-white border-b border-studio-border flex items-center justify-between shrink-0 z-50">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-1.5 hover:bg-studio-bg rounded-lg transition-colors text-studio-sub"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button>
           <div className="h-4 w-px bg-studio-border"></div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className="bg-transparent border-none text-[11px] font-black text-studio-dark w-[450px] focus:ring-0 p-0" placeholder="文章标题..." />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} className="bg-transparent border-none text-[11px] font-black text-studio-dark w-[350px] focus:ring-0 p-0" placeholder="文章标题..." />
         </div>
+
+        {/* 禅意模式切换按钮 */}
+        <div className="absolute left-1/2 -translate-x-1/2">
+          <button 
+            onClick={toggleZenMode}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-full border transition-all duration-500 group relative overflow-hidden ${
+              isZenMode 
+                ? 'bg-primary text-white border-primary shadow-xl shadow-primary/20 scale-105' 
+                : 'bg-white text-studio-sub border-studio-border hover:border-primary/40 hover:text-primary'
+            }`}
+          >
+            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 ${isZenMode ? 'rotate-180' : 'rotate-0'}`}>
+              {isZenMode ? 'fullscreen_exit' : 'fullscreen'}
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em]">禅意模式</span>
+            {isZenMode && (
+              <span className="absolute inset-0 bg-white/10 animate-pulse"></span>
+            )}
+          </button>
+        </div>
+
         <div className="flex items-center gap-3">
           <button onClick={() => setIsAiModalOpen(true)} className="px-6 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2 h-[36px]"><span className="material-symbols-outlined text-[18px] animate-pulse">auto_awesome</span>AI 一键创作</button>
           <button onClick={() => onPublish(editor?.getHTML() || '', title, activeBg, activeBrand)} className="px-6 py-2 bg-primary text-white text-[10px] font-black rounded-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest h-[36px]">预览并发布文章</button>
@@ -233,7 +261,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       </header>
 
       <div className="flex-1 flex overflow-hidden relative">
-        <div className={`transition-all duration-500 ease-in-out overflow-hidden border-r border-studio-border bg-white ${isLeftCollapsed ? 'w-0 opacity-0' : 'w-[240px] opacity-100'}`}>
+        <div className={`transition-all duration-500 ease-in-out overflow-hidden border-r border-studio-border bg-white ${isLeftCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-[240px] opacity-100'}`}>
           <LeftSidebar 
             activeTab={activeTab} setActiveTab={setActiveTab}
             bgPresets={bgPresets} activeBg={activeBg} setActiveBg={setActiveBg}
@@ -249,7 +277,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
         <div className="flex-1 relative overflow-hidden flex flex-col">
           <EditorWorkspace editor={editor} activeBg={activeBg} activeBrand={activeBrand} />
         </div>
-        <div className={`transition-all duration-500 ease-in-out overflow-hidden border-l border-studio-border bg-white ${isRightCollapsed ? 'w-0 opacity-0' : 'w-[260px] opacity-100'}`}>
+        <div className={`transition-all duration-500 ease-in-out overflow-hidden border-l border-studio-border bg-white ${isRightCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-[260px] opacity-100'}`}>
           <RightSidebar coverImage={coverImage} isGeneratingCover={false} onGenerateCover={() => {}} summary={summary} setSummary={setSummary} isGeneratingSummary={false} onGenerateSummary={() => {}} />
         </div>
       </div>
