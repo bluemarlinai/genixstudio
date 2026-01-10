@@ -1,16 +1,45 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface SettingsProps {
   onConfigPlatform: (platformId: string) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({ onConfigPlatform }) => {
+  const [apiKey, setApiKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState('gemini-3-pro-preview');
+  const [isSaved, setIsSaved] = useState(false);
+
+  // 初始化加载配置
+  useEffect(() => {
+    const savedKey = localStorage.getItem('user_gemini_api_key') || '';
+    const savedModel = localStorage.getItem('user_gemini_model') || 'gemini-3-pro-preview';
+    setApiKey(savedKey);
+    setSelectedModel(savedModel);
+  }, []);
+
+  const handleSaveAIConfig = () => {
+    localStorage.setItem('user_gemini_api_key', apiKey);
+    localStorage.setItem('user_gemini_model', selectedModel);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
+  };
+
+  const models = [
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', desc: 'Google 最强推理能力，适合深度长文创作', tag: 'RECOMMENDED', link: 'https://aistudio.google.com/app/apikey' },
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', desc: 'Google 极致响应速度，适合快速润色', tag: 'SPEED', link: 'https://aistudio.google.com/app/apikey' },
+    { id: 'deepseek-reasoner', name: 'DeepSeek-V3', desc: '国产最强开源模型，极高性价比与逻辑能力', tag: 'POPULAR', link: 'https://platform.deepseek.com/' },
+    { id: 'glm-4', name: '智谱 GLM-4', desc: '中英双语大师，更懂中国创作者的语境', tag: 'LOCAL', link: 'https://open.bigmodel.cn/' },
+    { id: 'qwen-max', name: '通义千问 Qwen', desc: '阿里自研大模型，具备极强的文案创意', tag: 'ENTERPRISE', link: 'https://dashscope.aliyun.com/' }
+  ];
+
+  const currentModelLink = models.find(m => m.id === selectedModel)?.link || 'https://aistudio.google.com/app/apikey';
+
   return (
     <div className="p-5 w-full space-y-5 pb-20 animate-in fade-in duration-500">
       <header>
         <h1 className="text-xl font-black tracking-tight text-studio-dark">个人与系统设置</h1>
-        <p className="text-[11px] text-studio-sub mt-0.5 font-medium">管理账户安全、个人品牌、团队协作及 AI 云端接口配置。</p>
+        <p className="text-[11px] text-studio-sub mt-0.5 font-medium">管理账户安全、个人品牌及 AI 云端模型接口配置。</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -41,35 +70,72 @@ const Settings: React.FC<SettingsProps> = ({ onConfigPlatform }) => {
             </div>
           </section>
 
-          {/* AI CONFIG */}
+          {/* AI MODEL CONFIG */}
           <section className="space-y-4">
             <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-studio-border pb-2 flex items-center justify-between">
-              AI 模型引擎 (Gemini)
-              <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+              AI 创作引擎中心
+              <span className="material-symbols-outlined text-[14px]">psychology</span>
             </h3>
-            <div className="bg-white rounded-[28px] border border-studio-border p-6 space-y-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
-                    <span className="material-symbols-outlined text-[20px]">key</span>
-                  </div>
-                  <div>
-                    <p className="text-xs font-black text-studio-dark">API 密钥管理</p>
-                    <p className="text-[9px] text-studio-sub font-bold uppercase tracking-tighter">Gemini Pro Multi-modal Engine</p>
-                  </div>
+            <div className="bg-white rounded-[32px] border border-studio-border p-8 space-y-8 shadow-sm">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-studio-dark uppercase tracking-[0.1em]">配置您的 API Key</label>
+                  <a href={currentModelLink} target="_blank" className="text-[9px] font-black text-primary hover:underline flex items-center gap-1">
+                    获取当前模型密钥 <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                  </a>
                 </div>
-                <button 
-                  onClick={async () => window.aistudio?.openSelectKey?.()} 
-                  className="px-5 py-2 bg-primary text-white text-[9px] font-black rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-95 uppercase tracking-widest"
-                >
-                  更换密钥
-                </button>
+                <div className="relative">
+                  <input 
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="w-full bg-studio-bg border-none rounded-2xl px-5 py-4 text-xs font-mono focus:ring-2 ring-primary/20 transition-all"
+                    placeholder="在此输入您的 API Key..."
+                  />
+                  {apiKey && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-emerald-500">verified</span>
+                  )}
+                </div>
               </div>
-              <div className="p-4 bg-primary/[0.02] rounded-xl border border-primary/5 flex items-start gap-3">
-                <span className="material-symbols-outlined text-primary text-[18px] mt-0.5">info</span>
-                <p className="text-[10px] leading-relaxed text-studio-sub font-medium">
-                  生成高质量 4K 图像及 Veo 视频需要连接 Google Cloud 付费项目。查看 <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="font-bold underline text-primary">账单指南</a>。
-                </p>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-studio-dark uppercase tracking-[0.1em] block">选择驱动模型 (Model Selection)</label>
+                <div className="grid grid-cols-1 gap-3">
+                  {models.map((m) => (
+                    <button 
+                      key={m.id}
+                      onClick={() => setSelectedModel(m.id)}
+                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all text-left group ${selectedModel === m.id ? 'border-primary bg-primary/[0.02] shadow-sm' : 'border-studio-border hover:bg-studio-bg'}`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${selectedModel === m.id ? 'bg-primary text-white' : 'bg-studio-bg text-studio-sub'}`}>
+                          <span className="material-symbols-outlined text-[20px]">{selectedModel === m.id ? 'check_circle' : 'smart_toy'}</span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-black text-studio-dark">{m.name}</p>
+                            <span className="text-[7px] font-black bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded uppercase tracking-tighter">{m.tag}</span>
+                          </div>
+                          <p className="text-[10px] text-studio-sub mt-0.5 font-medium">{m.desc}</p>
+                        </div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedModel === m.id ? 'border-primary' : 'border-studio-border'}`}>
+                        {selectedModel === m.id && <div className="w-2.5 h-2.5 bg-primary rounded-full animate-in zoom-in duration-300"></div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-studio-border flex justify-between items-center">
+                <p className="text-[9px] text-studio-sub font-medium max-w-[300px]">配置将本地保存。支持通过 OpenAI 格式调用非 Google 模型。</p>
+                <button 
+                  onClick={handleSaveAIConfig}
+                  className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center gap-2 ${isSaved ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-studio-dark text-white hover:bg-black shadow-black/10'}`}
+                >
+                  {isSaved ? <span className="material-symbols-outlined text-[18px]">done_all</span> : <span className="material-symbols-outlined text-[18px]">save</span>}
+                  {isSaved ? '保存成功' : '应用 AI 配置'}
+                </button>
               </div>
             </div>
           </section>
@@ -104,6 +170,22 @@ const Settings: React.FC<SettingsProps> = ({ onConfigPlatform }) => {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-8 p-6 bg-primary/5 rounded-[28px] border border-primary/10 space-y-3">
+            <h4 className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-2">
+              <span className="material-symbols-outlined text-[16px]">verified</span>
+              订阅权益
+            </h4>
+            <p className="text-[11px] text-studio-dark font-bold leading-relaxed">您当前处于 <span className="text-primary italic font-black">PRO 工作室</span> 方案。</p>
+            <ul className="space-y-2">
+              {['无限 AI 润色次数', 'Veo 高清视频生成', '自定义品牌水印'].map((item, i) => (
+                <li key={i} className="flex items-center gap-2 text-[9px] text-studio-sub font-medium">
+                  <span className="material-symbols-outlined text-primary text-[14px]">check_circle</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       </div>
