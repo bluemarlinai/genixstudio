@@ -106,7 +106,7 @@ const App: React.FC = () => {
   const showCreationButtons = userRole !== 'ADMIN' && ['DASHBOARD', 'CONTENT_LIST', 'TEMPLATES', 'MEDIA_LIBRARY', 'ANNOUNCEMENTS', 'CALENDAR', 'SETTINGS'].includes(currentView);
 
   if (currentView === 'LANDING') return <LandingPage onStart={setCurrentView} />;
-  if (currentView === 'LOGIN') return <LoginPage onLogin={handleLogin} />;
+  if (currentView === 'LOGIN') return <LoginPage onLogin={handleLogin} onBackToLanding={() => setCurrentView('LANDING')} />;
   if (currentView === 'TERMS') return <TermsPage onBack={() => setCurrentView('LANDING')} />;
   if (currentView === 'PRIVACY') return <PrivacyPage onBack={() => setCurrentView('LANDING')} />;
   if (currentView === 'UPGRADE') return <UpgradePage onBack={() => setCurrentView('DASHBOARD')} onUpgrade={() => setCurrentView('PAYMENT')} />;
