@@ -4,7 +4,6 @@ import { useEditor } from '@tiptap/react';
 import { Node, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import BubbleMenu from '@tiptap/extension-bubble-menu';
 import Bold from '@tiptap/extension-bold';
 import Italic from '@tiptap/extension-italic';
 import Strike from '@tiptap/extension-strike';
@@ -115,7 +114,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
 
   const editor = useEditor({
     extensions: [
-      StarterKit, Bold, Italic, Strike, Code, BubbleMenu,
+      StarterKit, Bold, Italic, Strike, Code,
       Heading.configure({ levels: [1, 2, 3] }),
       BulletList, OrderedList, ListItem, Blockquote, HorizontalRule,
       Div, SpanMark, Image, 
@@ -191,7 +190,8 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
         contents: `你是一位专业的新媒体运营总监，擅长写爆款标题。请根据用户的想法：'${aiIdea}'，给出 4 个具有吸引力的文章标题，涵盖不同的风格（如：专业严谨、情感共鸣、极客前沿、实用指南）。请仅返回 JSON 数组格式，例如 ["标题1", "标题2", "标题3", "标题4"]`,
         config: { responseMimeType: "application/json" }
       });
-      const titles = JSON.parse(response.text);
+      // Corrected: response.text is a property
+      const titles = JSON.parse(response.text || "[]");
       setSuggestedTitles(titles);
     } catch (err) {
       console.error(err);
@@ -224,7 +224,8 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
         config: { responseMimeType: "application/json" }
       });
       
-      const result = JSON.parse(response.text);
+      // Corrected: response.text is a property
+      const result = JSON.parse(response.text || "{}");
       editor?.commands.setContent(result.html);
       setSummary(result.summary);
       
@@ -266,12 +267,12 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsAiModalOpen(true)}
-            className="px-6 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2"
+            className="px-6 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2 h-[36px]"
           >
             <span className="material-symbols-outlined text-[18px] animate-pulse">auto_awesome</span>
             AI 一键创作
           </button>
-          <button onClick={() => onPublish(editor?.getHTML() || '', title, activeBg, activeBrand)} className="px-6 py-2 bg-primary text-white text-[10px] font-black rounded-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest">
+          <button onClick={() => onPublish(editor?.getHTML() || '', title, activeBg, activeBrand)} className="px-6 py-2 bg-primary text-white text-[10px] font-black rounded-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest h-[36px]">
             预览并发布文章
           </button>
         </div>
@@ -283,7 +284,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
             activeTab={activeTab} setActiveTab={setActiveTab}
             bgPresets={bgPresets} activeBg={activeBg} setActiveBg={setActiveBg}
             decorationPresets={decorationPresets} onInsertDecoration={(p) => editor?.chain().focus().insertContent(p.template).run()}
-            brandPresets={brandPresets} activeBrand={activeBrand} setActiveBrand={setActiveBrand}
+            brandPresets={brandPresets} activeBrand={brandPresets.find(b => b.id === activeBrand.id) || activeBrand} setActiveBrand={setActiveBrand}
             snippetPresets={snippetPresets} onInsertSnippet={(s) => {
               if (!editor) return;
               const cleanContent = s.content.replace(/>\s+</g, '><'); 

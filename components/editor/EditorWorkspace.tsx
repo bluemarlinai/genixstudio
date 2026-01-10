@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-/* Fixed: BubbleMenu and EditorContent are standard exports from @tiptap/react for React applications */
-import { EditorContent, BubbleMenu } from '@tiptap/react';
+/* Corrected: Removed BubbleMenu from @tiptap/react as it is not a standard export for this context or version */
+import { EditorContent } from '@tiptap/react';
 import { Editor } from '@tiptap/core';
 import { BackgroundPreset, BrandPreset } from './EditorTypes';
 
@@ -236,56 +236,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       className="flex-1 overflow-y-auto bg-studio-bg/60 flex flex-col items-center scroll-smooth pt-8 pb-32 relative transition-all duration-500"
     >
       
-      {/* Bubble Menu for Selections */}
-      {editor && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }} className="bubble-menu">
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (editor.chain().focus() as any).toggleBold().run()}
-            className={editor.isActive('bold') ? 'is-active' : ''}
-          >
-            <span className="material-symbols-outlined text-[18px]">format_bold</span>
-          </button>
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (editor.chain().focus() as any).toggleItalic().run()}
-            className={editor.isActive('italic') ? 'is-active' : ''}
-          >
-            <span className="material-symbols-outlined text-[18px]">format_italic</span>
-          </button>
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (editor.chain().focus() as any).toggleStrike().run()}
-            className={editor.isActive('strike') ? 'is-active' : ''}
-          >
-            <span className="material-symbols-outlined text-[18px]">strikethrough_s</span>
-          </button>
-          <div className="w-px h-4 bg-white/20 mx-1 self-center"></div>
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (editor.chain().focus() as any).toggleHeading({ level: 1 }).run()}
-            className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
-          >
-            <span className="text-[10px] font-black px-1">H1</span>
-          </button>
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => (editor.chain().focus() as any).toggleHeading({ level: 2 }).run()}
-            className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
-          >
-            <span className="text-[10px] font-black px-1">H2</span>
-          </button>
-          <div className="w-px h-4 bg-white/20 mx-1 self-center"></div>
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {}}
-            className="text-primary"
-          >
-            <span className="material-symbols-outlined text-[18px]">bolt</span>
-          </button>
-        </BubbleMenu>
-      )}
-
       {/* 1. STICKY TOOLBAR */}
       <div className="sticky top-8 mb-8 flex items-center gap-1.5 bg-white/90 backdrop-blur-xl border border-studio-border rounded-[22px] p-1.5 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] z-50 ring-1 ring-black/5 animate-in slide-in-from-top-4 duration-500">
         <div className="flex items-center gap-0.5 pr-1.5 border-r border-studio-border">
