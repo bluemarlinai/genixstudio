@@ -1,7 +1,5 @@
-
 import React, { useEffect, useState, useRef } from 'react';
-/* Fixed: Ensure correct import for BubbleMenu and other components from @tiptap/react */
-/* BubbleMenu is a component provided by @tiptap/react for floating menus */
+/* Fixed: BubbleMenu is imported from @tiptap/react as the UI component */
 import { EditorContent, BubbleMenu } from '@tiptap/react';
 import { Editor } from '@tiptap/core';
 import { BackgroundPreset, BrandPreset } from './EditorTypes';

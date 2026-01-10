@@ -15,7 +15,7 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
   const [isPublishing, setIsPublishing] = useState(false);
   const [selectedTime, setSelectedTime] = useState<'now' | 'scheduled'>('now');
   const [device, setDevice] = useState<'mobile' | 'pc'>('mobile');
-  const [copyStatus, setCopyStatus] = useState<'IDLE' | 'COPIED' | 'ERROR'>('IDLE');
+  const [copyStatus, setCopyStatus] = useState<'IDLE' | 'WECHAT_COPIED' | 'TOUTIAO_COPIED' | 'ERROR'>('IDLE');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['wechat']);
 
   const togglePlatform = (id: string) => {
@@ -32,16 +32,17 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
     }, 2000);
   };
 
+  const remToPx = (styleStr: string) => {
+    if (!styleStr) return '';
+    return styleStr.replace(/([\d.]+)rem/g, (_, p1) => `${parseFloat(p1) * 16}px`);
+  };
+
   /**
-   * 微信公众号超高保真处理逻辑 - 严格清理版
+   * 微信公众号超高保真处理逻辑
    */
   const processHtmlForWechat = (rawHtml: string) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(rawHtml, 'text/html');
-    
-    const remToPx = (styleStr: string) => {
-      return styleStr.replace(/([\d.]+)rem/g, (_, p1) => `${parseFloat(p1) * 16}px`);
-    };
 
     const styleMap: Record<string, string> = {
       'h1': 'font-size: 24px; font-weight: bold; color: #1e293b; margin: 25px 0 15px; line-height: 1.4; padding: 0;',
@@ -110,18 +111,60 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
     return `<section style="margin: 0; padding: 0; font-family: -apple-system-font,BlinkMacSystemFont,Helvetica Neue,PingFang SC,Hiragino Sans GB,Microsoft YaHei UI,Microsoft YaHei,Arial,sans-serif; width: 100%; box-sizing: border-box; ${bgStyleStr}"><section style="margin: 0; padding: 20px 15px; width: 100%; box-sizing: border-box !important; overflow: hidden; display: block;">${doc.body.innerHTML}<section style="margin: 40px 0 20px; text-align: center; color: #bbbbbb; font-size: 11px; letter-spacing: 2px;"><p style="margin: 0; opacity: 0.5; padding: 0;">POWERED BY GENIX STUDIO</p></section></section></section>`;
   };
 
-  const handleCopyArticle = async () => {
+  /**
+   * 今日头条专属 HTML 处理逻辑 - 遵循扁平化与精简原则
+   */
+  const processHtmlForToutiao = (rawHtml: string) => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawHtml, 'text/html');
+    
+    // 今日头条对样式的支持较窄，主要支持基本的文字和间距
+    const styleMap: Record<string, string> = {
+      'h1': 'font-size: 24px; font-weight: bold; color: #222; margin-top: 24px; margin-bottom: 16px; line-height: 1.4;',
+      'h2': 'font-size: 20px; font-weight: bold; color: #222; margin-top: 22px; margin-bottom: 14px; border-left: 4px solid #f85959; padding-left: 10px; line-height: 1.4;',
+      'h3': 'font-size: 18px; font-weight: bold; color: #222; margin-top: 20px; margin-bottom: 12px; line-height: 1.4;',
+      'p': 'font-size: 16px; line-height: 1.8; color: #333; margin-top: 16px; margin-bottom: 16px; text-align: justify;',
+      'blockquote': 'border-left: 4px solid #e8e8e8; padding: 12px 16px; color: #666; background-color: #f4f5f6; margin: 20px 0;',
+      'strong': 'font-weight: bold; color: #000;',
+      'img': 'max-width: 100% !important; height: auto; display: block; margin: 20px auto; border-radius: 4px;'
+    };
+
+    // 头条对 div 嵌套支持较差，将装饰块转化为扁平化的 section 或 p
+    const blocks = doc.querySelectorAll('.decoration-block');
+    blocks.forEach(block => {
+      const flatSection = doc.createElement('section');
+      let blockStyle = remToPx(block.getAttribute('style') || '');
+      // 保持简洁的背景色和边距
+      flatSection.setAttribute('style', `margin: 20px 0; padding: 16px; background-color: #f8f8f8; border-radius: 8px; ${blockStyle}`);
+      flatSection.innerHTML = block.innerHTML;
+      block.parentNode?.replaceChild(flatSection, block);
+    });
+
+    const allElements = doc.body.querySelectorAll('*');
+    allElements.forEach(el => {
+      const tagName = el.tagName.toLowerCase();
+      const baseStyle = styleMap[tagName] || '';
+      let existingStyle = remToPx(el.getAttribute('style') || '');
+      el.setAttribute('style', `${baseStyle}; ${existingStyle}`.trim());
+      el.removeAttribute('class'); // 今日头条编辑器主要依赖内联 style
+    });
+
+    return `<div>${doc.body.innerHTML}</div>`;
+  };
+
+  const handleCopy = async (platform: 'WECHAT' | 'TOUTIAO') => {
     try {
-      const processedHtml = processHtmlForWechat(content);
-      const plainText = title + '\n\n' + content.replace(/<[^>]*>/g, '');
+      const processedHtml = platform === 'WECHAT' 
+        ? processHtmlForWechat(content) 
+        : processHtmlForToutiao(content);
       
-      // 使用 ClipboardItem 时，确保 HTML 字符串是干净的，没有任何多余的控制字符
+      const plainText = title + '\n\n' + content.replace(/<[^>]*>/g, '');
       const htmlBlob = new Blob([processedHtml], { type: 'text/html' });
       const textBlob = new Blob([plainText], { type: 'text/plain' });
       const data = [new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })];
       
       await navigator.clipboard.write(data);
-      setCopyStatus('COPIED');
+      setCopyStatus(platform === 'WECHAT' ? 'WECHAT_COPIED' : 'TOUTIAO_COPIED');
       setTimeout(() => setCopyStatus('IDLE'), 3000);
     } catch (err) {
       console.error('Copy failed:', err);
@@ -132,8 +175,8 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
 
   const platforms = [
     { id: 'wechat', name: '微信公众号', icon: 'chat', color: 'text-green-600', bg: 'bg-green-50' },
-    { id: 'zhihu', name: '知乎', icon: 'school', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { id: 'medium', name: 'Medium', icon: 'article', color: 'text-black', bg: 'bg-gray-100' }
+    { id: 'toutiao', name: '今日头条', icon: 'newspaper', color: 'text-red-600', bg: 'bg-red-50' },
+    { id: 'zhihu', name: '知乎', icon: 'school', color: 'text-blue-600', bg: 'bg-blue-50' }
   ];
 
   return (
@@ -173,16 +216,6 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
         <main className="flex-1 overflow-y-auto p-8 lg:p-12 flex justify-center bg-studio-bg relative">
           <div className={`transition-all duration-700 ease-in-out ${device === 'mobile' ? 'w-[375px] h-[760px] rounded-[50px] border-[12px] border-studio-dark shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] bg-white overflow-hidden sticky top-0' : 'w-full max-w-4xl h-fit min-h-[600px] rounded-3xl border border-studio-border bg-white shadow-2xl overflow-hidden'}`}>
             <div className="h-full flex flex-col relative rounded-[38px] bg-white">
-              {device === 'mobile' && (
-                <div className="h-10 w-full bg-white flex justify-between items-center px-8 shrink-0">
-                  <span className="text-[10px] font-bold">9:41</span>
-                  <div className="flex gap-1.5 items-center">
-                    <span className="material-symbols-outlined text-[14px]">signal_cellular_alt</span>
-                    <span className="material-symbols-outlined text-[14px]">wifi</span>
-                    <span className="material-symbols-outlined text-[14px]">battery_full</span>
-                  </div>
-                </div>
-              )}
               <div className={`flex-1 overflow-y-auto p-0 ${device === 'pc' ? 'max-w-3xl mx-auto' : ''}`}>
                 <ArticlePreviewContent mode={device} content={content} title={title} bg={bg} />
               </div>
@@ -207,31 +240,39 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
           </section>
 
           <section className="space-y-4">
-            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">发布排程设置</h3>
-            <div className="flex bg-studio-bg p-1 rounded-2xl border border-studio-border">
-              <button onClick={() => setSelectedTime('now')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black transition-all ${selectedTime === 'now' ? 'bg-white text-primary shadow-sm' : 'text-studio-sub'}`}><span className="material-symbols-outlined text-[18px]">bolt</span>立即分发</button>
-              <button onClick={() => setSelectedTime('scheduled')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-[10px] font-black transition-all ${selectedTime === 'scheduled' ? 'bg-white text-primary shadow-sm' : 'text-studio-sub'}`}><span className="material-symbols-outlined text-[18px]">calendar_month</span>定时发布</button>
-            </div>
-          </section>
-
-          <div className="w-full h-px bg-studio-border"></div>
-
-          <section className="space-y-4">
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">手动拷贝样式</h3>
-            <button 
-              onClick={handleCopyArticle}
-              className={`w-full p-6 rounded-3xl border transition-all flex flex-col gap-2 group relative overflow-hidden ${copyStatus === 'COPIED' ? 'border-green-500 bg-green-50 ring-4 ring-green-100' : 'border-primary/20 bg-primary/[0.02] hover:bg-primary/[0.05] ring-4 ring-primary/5'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${copyStatus === 'COPIED' ? 'bg-green-500 text-white' : 'bg-primary text-white shadow-lg shadow-primary/20'}`}><span className="material-symbols-outlined text-[20px]">{copyStatus === 'COPIED' ? 'check_circle' : 'content_paste_go'}</span></div>
-                <div className="text-left"><span className={`text-xs font-black block ${copyStatus === 'COPIED' ? 'text-green-700' : 'text-primary'}`}>{copyStatus === 'COPIED' ? '已复制高保真样式' : '拷贝微信富文本'}</span><p className="text-[9px] text-studio-sub font-bold uppercase tracking-tighter">深度还原底纹 · 边框修复</p></div>
-              </div>
-            </button>
+            <div className="grid grid-cols-1 gap-3">
+              <button 
+                onClick={() => handleCopy('WECHAT')}
+                className={`w-full p-4 rounded-2xl border transition-all flex flex-col gap-1 group relative overflow-hidden ${copyStatus === 'WECHAT_COPIED' ? 'border-green-500 bg-green-50 shadow-sm' : 'border-studio-border hover:border-primary/40 hover:bg-primary/[0.02]'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${copyStatus === 'WECHAT_COPIED' ? 'bg-green-500 text-white' : 'bg-studio-bg text-studio-sub group-hover:text-primary'}`}><span className="material-symbols-outlined text-[18px]">{copyStatus === 'WECHAT_COPIED' ? 'check_circle' : 'chat'}</span></div>
+                  <div className="text-left">
+                    <span className={`text-xs font-black block ${copyStatus === 'WECHAT_COPIED' ? 'text-green-700' : 'text-studio-dark group-hover:text-primary'}`}>拷贝微信富文本</span>
+                    <p className="text-[8px] text-studio-sub font-bold uppercase tracking-tighter">全方位还原底纹与边框</p>
+                  </div>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => handleCopy('TOUTIAO')}
+                className={`w-full p-4 rounded-2xl border transition-all flex flex-col gap-1 group relative overflow-hidden ${copyStatus === 'TOUTIAO_COPIED' ? 'border-red-500 bg-red-50 shadow-sm' : 'border-studio-border hover:border-red-400/40 hover:bg-red-50/30'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${copyStatus === 'TOUTIAO_COPIED' ? 'bg-red-500 text-white' : 'bg-studio-bg text-studio-sub group-hover:text-red-500'}`}><span className="material-symbols-outlined text-[18px]">{copyStatus === 'TOUTIAO_COPIED' ? 'check_circle' : 'newspaper'}</span></div>
+                  <div className="text-left">
+                    <span className={`text-xs font-black block ${copyStatus === 'TOUTIAO_COPIED' ? 'text-red-700' : 'text-studio-dark group-hover:text-red-500'}`}>拷贝今日头条样式</span>
+                    <p className="text-[8px] text-studio-sub font-bold uppercase tracking-tighter">扁平化处理 · 兼容性适配</p>
+                  </div>
+                </div>
+              </button>
+            </div>
           </section>
 
           <div className="pt-8 mt-auto">
             <button onClick={handleFinalPublish} disabled={isPublishing || selectedPlatforms.length === 0} className="w-full py-5 bg-studio-dark text-white rounded-[28px] font-black shadow-2xl hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 group">
-              {isPublishing ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div><span className="uppercase tracking-widest">正在分发任务...</span></> : <><span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">send</span><span className="uppercase tracking-widest text-sm">一键发布到 {selectedPlatforms.length} 渠道</span></>}
+              {isPublishing ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div><span className="uppercase tracking-widest">任务分发中...</span></> : <><span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">send</span><span className="uppercase tracking-widest text-sm">一键发布到 {selectedPlatforms.length} 渠道</span></>}
             </button>
           </div>
         </aside>
