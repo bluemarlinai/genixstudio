@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEditor } from '@tiptap/react';
 import { Node, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -21,6 +21,9 @@ import { bgPresets, decorationPresets, brandPresets, snippetPresets } from '../c
 import LeftSidebar from '../components/editor/LeftSidebar';
 import RightSidebar from '../components/editor/RightSidebar';
 import EditorWorkspace from '../components/editor/EditorWorkspace';
+import { GoogleGenAI } from "@google/genai";
+
+const STORAGE_DRAFT_KEY = 'genix_editor_draft';
 
 // Define a custom Mark for span tags to handle custom styles like background-color
 const SpanMark = Mark.create({
@@ -93,159 +96,22 @@ interface EditorProps {
 }
 
 const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
-  const [title, setTitle] = useState('🎨太酷啦！NotebookLM生成PPT也太丝滑了！这效果直接拿去毕业答辩/路演，稳了！🏆');
-  const [summary, setSummary] = useState('深度测评 Google 最新黑科技 NotebookLM 的 PPT 自动化生成能力...');
+  const [title, setTitle] = useState('未命名文章');
+  const [summary, setSummary] = useState('');
   const [coverImage, setCoverImage] = useState('https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&q=80&w=800');
   const [activeTab, setActiveTab] = useState<SidebarTab>('BACKGROUND');
   
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
   
-  const [activeBg, setActiveBg] = useState<BackgroundPreset>(bgPresets[1]);
+  const [activeBg, setActiveBg] = useState<BackgroundPreset>(bgPresets[0]);
   const [activeBrand, setActiveBrand] = useState<BrandPreset>(brandPresets[0]);
 
-  const toggleZenMode = () => {
-    setIsLeftCollapsed(!isLeftCollapsed);
-    setIsRightCollapsed(!isRightCollapsed);
-  };
-
-  const longContent = `
-    <div class="article-meta" style="margin-bottom: 40px; font-family: -apple-system-font, system-ui, sans-serif;">
-      <p style="margin: 0; font-size: 15px; color: #888888; letter-spacing: 1px; line-height: 1.4;">
-        GENIX INSIGHTS <span style="margin: 0 4px; color: #137fec; font-weight: 700;">AI 效率实验室</span>
-      </p>
-      <p style="margin: 4px 0 0; font-size: 13px; color: #b2b2b2; line-height: 1.4;">发布时间：2024年12月15日 · 阅读时间约 10 分钟</p>
-    </div>
-
-    <h1 style="font-size: 32px; font-weight: 900; line-height: 1.3; color: #111; margin-bottom: 24px;">为什么 NotebookLM 正在杀死传统的 PPT 制作逻辑？</h1>
-
-    <p style="line-height: 1.8; letter-spacing: 0.02em; margin-bottom: 24px; color: #333; font-size: 17px;">
-      在这个“人人皆可 AI”的时代，我们见惯了各种生成 PPT 的工具。从早期的 Gamma 到后来的 Canva Magic Design，虽然视觉上越来越华丽，但始终存在一个<strong>致命伤</strong>：内容空洞。它们生成的文字往往是泛泛而谈的废话，根本无法支撑起一场严肃的<strong>毕业答辩</strong>或<strong>商业路演</strong>。
-    </p>
-
-    <div class="decoration-block" style="margin: 40px 0; padding: 24px; background: #f0f7ff; border-radius: 20px; border-left: 6px solid #137fec; position: relative;">
-      <span class="material-symbols-outlined" style="position: absolute; right: 16px; top: 16px; color: #137fec; opacity: 0.2; font-size: 40px;">lightbulb</span>
-      <h4 style="margin: 0 0 8px; font-size: 14px; font-weight: 900; color: #137fec; text-transform: uppercase; letter-spacing: 1px;">Key Insight / 核心观察</h4>
-      <p style="margin: 0; font-size: 16px; font-weight: 700; color: #1e293b; line-height: 1.6;">NotebookLM 的 PPT 生成逻辑是“基于事实的重组”，而不是“基于概率的瞎编”。这正是专业人士最需要的能力。</p>
-    </div>
-
-    <h2 style="font-size: 24px; font-weight: 850; border-bottom: 2px solid #eee; padding-bottom: 12px; margin: 48px 0 24px;">一、 痛点直击：为什么你的 PPT 总是“答非所问”？</h2>
-
-    <p style="line-height: 1.8; margin-bottom: 20px;">
-      想象一下，你有一篇 2 万字的毕业论文，或者一份 50 页的市场调研报告。如果你想把它转化成 15 页的答辩 PPT，传统的路径是：
-    </p>
-    <ul style="margin-bottom: 24px; padding-left: 20px; line-height: 2;">
-      <li>阅读全文并手动提取大纲（耗时 2-4 小时）；</li>
-      <li>手动排版每一页的标题和要点（耗时 3 小时）；</li>
-      <li>寻找合适的逻辑图表（耗时 2 小时）。</li>
-    </ul>
-    <p style="line-height: 1.8; margin-bottom: 24px;">
-      而市面上的通用型 AI，往往会因为无法完全理解你文档中的专业术语、实验数据或逻辑推演，生成的内容牛头不对马嘴。<strong>Google NotebookLM</strong> 的出现，彻底改变了这个博弈规则。
-    </p>
-
-    <div class="decoration-block" style="margin: 32px 0; display: flex; gap: 16px;">
-        <div style="flex: 1; background: #fff; padding: 20px; border-radius: 20px; text-align: center; border: 1px solid #f0f2f4; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-          <p style="font-size: 10px; font-weight: 900; color: #137fec; margin-bottom: 8px;">TRADITIONAL</p>
-          <p style="font-size: 15px; font-weight: 800; color: #334155;">体力驱动<br/>容易遗漏数据</p>
-        </div>
-        <div style="flex: 1; background: #137fec; padding: 20px; border-radius: 20px; text-align: center; color: white;">
-          <p style="font-size: 10px; font-weight: 900; color: rgba(255,255,255,0.7); margin-bottom: 8px;">NOTEBOOKLM</p>
-          <p style="font-size: 15px; font-weight: 800;">逻辑驱动<br/>100% 来源溯源</p>
-        </div>
-    </div>
-
-    <h2 style="font-size: 24px; font-weight: 850; border-bottom: 2px solid #eee; padding-bottom: 12px; margin: 48px 0 24px;">二、 深度测评：NotebookLM 生成 PPT 的“保姆级”流程</h2>
-
-    <p style="line-height: 1.8; margin-bottom: 20px;">经过我们实验室连续一周的测试，我们总结出了让 NotebookLM 生成“高含金量”PPT 的三个核心步骤：</p>
-
-    <h3 style="font-size: 20px; font-weight: 800; margin: 32px 0 16px; color: #137fec;">1. 喂养：建立高质量的本地知识库</h3>
-    <p style="line-height: 1.8; margin-bottom: 20px;">
-      NotebookLM 最大的优势在于 RAG（检索增强生成）。你不仅可以上传 PDF，还可以直接粘贴网页链接。对于毕业答辩，建议直接喂入：
-    </p>
-    <code style="display: block; background: #f8fafc; padding: 16px; border-radius: 12px; font-family: monospace; font-size: 13px; margin-bottom: 24px; border: 1px solid #e2e8f0;">
-      - 论文正文.pdf<br/>
-      - 实验原始数据表.xlsx<br/>
-      - 指导老师的修改建议.docx
-    </code>
-
-    <h3 style="font-size: 20px; font-weight: 800; margin: 32px 0 16px; color: #137fec;">2. 提炼：利用音频笔记进行“预处理”</h3>
-    <p style="line-height: 1.8; margin-bottom: 24px;">
-      这是最神奇的一步！先让 NotebookLM 生成一个 <strong>Audio Overview</strong>。通过两个虚拟主持人的对话，你能瞬间听出你文档中最重要的“论点”和“亮点”。把这些对话内容转录为文字，作为 PPT 的逻辑主轴。
-    </p>
-
-    <div class="decoration-block" style="margin: 40px 0; text-align: center; padding: 40px 20px; background: #ffffff; border: 1px solid #eeeeee; border-radius: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.03);">
-        <p style="font-size: 48px; color: #137fec; margin: 0; line-height: 1; opacity: 0.2; font-family: serif;">“</p>
-        <p style="font-size: 20px; font-weight: 800; color: #111; margin: 10px 0 20px; line-height: 1.5; font-style: italic;">
-          NotebookLM 不只是在总结，它在帮你‘翻译’复杂的论文逻辑，将其降维打击为通俗易懂的展示逻辑。
-        </p>
-        <div style="width: 40px; height: 2px; background: #137fec; margin: 0 auto;"></div>
-    </div>
-
-    <h3 style="font-size: 20px; font-weight: 800; margin: 32px 0 16px; color: #137fec;">3. 转化：基于 Prompt 的结构化输出</h3>
-    <p style="line-height: 1.8; margin-bottom: 24px;">
-      在右侧对话框输入：“请基于上传的所有文档，为我起草一份 12 页的学术答辩 PPT 大纲。要求：每一页包含标题、核心论点（Bullet points）、以及建议的视觉图表（如：此处建议使用对比柱状图）。确保引用具体的数据支持。”
-    </p>
-
-    <h2 style="font-size: 24px; font-weight: 850; border-bottom: 2px solid #eee; padding-bottom: 12px; margin: 48px 0 24px;">三、 对比实验：NotebookLM vs 传统 AI 助手</h2>
-
-    <div style="overflow-x: auto; margin-bottom: 32px;">
-      <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: left;">
-        <thead>
-          <tr style="background: #f1f5f9;">
-            <th style="padding: 12px; border: 1px solid #e2e8f0;">维度</th>
-            <th style="padding: 12px; border: 1px solid #e2e8f0;">NotebookLM</th>
-            <th style="padding: 12px; border: 1px solid #e2e8f0;">某常用 GPT 工具</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="padding: 12px; border: 1px solid #e2e8f0; font-weight: bold;">数据真实性</td>
-            <td style="padding: 12px; border: 1px solid #e2e8f0; color: #059669;">极高 (严格遵循原文)</td>
-            <td style="padding: 12px; border: 1px solid #e2e8f0; color: #dc2626;">中等 (偶有幻觉)</td>
-          </tr>
-          <tr>
-            <td style="padding: 12px; border: 1px solid #e2e8f0; font-weight: bold;">专业逻辑</td>
-            <td style="padding: 12px; border: 1px solid #e2e8f0; color: #059669;">极强 (理解长文本脉络)</td>
-            <td style="padding: 12px; border: 1px solid #e2e8f0; color: #d97706;">一般 (碎片化严重)</td>
-          </tr>
-          <tr>
-            <td style="padding: 12px; border: 1px solid #e2e8f0; font-weight: bold;">溯源能力</td>
-            <td style="padding: 12px; border: 1px solid #e2e8f0;">支持 (点击即看原文)</td>
-            <td style="padding: 12px; border: 1px solid #e2e8f0;">不支持</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p style="line-height: 1.8; margin-bottom: 24px;">
-      我们可以看到，在涉及到<strong>严肃学术</strong>或<strong>精密商业</strong>领域时，NotebookLM 的表现堪称降维打击。它不仅能记住你在第 32 页提到的一个微小变量，还能在第 5 页的 PPT 总结中将其作为关键支撑点列出。
-    </p>
-
-    <h2 style="font-size: 24px; font-weight: 850; border-bottom: 2px solid #eee; padding-bottom: 12px; margin: 48px 0 24px;">四、 实战避坑：如何避免生成的 PPT 像说明书？</h2>
-
-    <p style="line-height: 1.8; margin-bottom: 20px;">很多初学者会抱怨 NotebookLM 生成的东西“太硬”，没有美感。这里有三个进阶技巧：</p>
-    
-    <div style="background: #fff; border: 1px solid #eee; border-radius: 24px; padding: 24px; margin-bottom: 32px;">
-      <p style="margin-bottom: 12px;"><strong>💡 技巧 1：指定分众角色</strong><br/>在 Prompt 中加入：“请以麦肯锡高级顾问的口吻重新修辞，让逻辑更具说服力。”</p>
-      <p style="margin-bottom: 12px;"><strong>🎨 技巧 2：结构化视觉建议</strong><br/>要求 AI 在每一页结尾注明：“视觉建议：此处应展示 2020-2024 年的增长曲线，并高亮 2023 年的拐点。”</p>
-      <p style="margin-bottom: 0;"><strong>⚡ 技巧 3：结合 Canva/Slidev</strong><br/>将生成的 Markdown 大纲一键导入 Slidev 或 Canva 的 AI 编辑器，实现“文案+排版”的无缝闭环。</p>
-    </div>
-
-    <h2 style="font-size: 24px; font-weight: 850; border-bottom: 2px solid #eee; padding-bottom: 12px; margin: 48px 0 24px;">五、 总结：效率工具的终局是“理解力”</h2>
-
-    <p style="line-height: 1.8; margin-bottom: 24px;">
-      随着 NotebookLM 这种深度内容理解工具的普及，我们可能真的要迎来 PPT 的“白银时代”。在未来，老板或导师不再看谁的 PPT 画得更漂亮，而是看谁的内容更有逻辑、数据更有支撑、见解更有洞察。
-    </p>
-
-    <p style="line-height: 1.8; margin-bottom: 24px; font-weight: 700;">
-      如果你还在为了明天的答辩焦头烂额，赶紧打开 NotebookLM，把你的论文丢进去试试。相信我，那种“思维被瞬间理顺”的感觉，真的会上瘾。
-    </p>
-
-    <div class="decoration-block" style="margin-top: 60px; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 32px;">
-        <p style="font-size: 14px; color: #94a3b8; font-weight: 500; margin: 0;">感谢阅读。如果觉得有用，欢迎点赞分享。</p>
-        <p style="font-size: 10px; font-weight: 900; color: #cbd5e1; margin-top: 16px; letter-spacing: 2px;">POWERED BY GENIX AI LAB</p>
-    </div>
-  `;
+  // AI 自动写作状态
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const [aiIdea, setAiIdea] = useState('');
+  const [aiLoadingStage, setAiLoadingStage] = useState<'IDLE' | 'TITLES' | 'GENERATING'>('IDLE');
+  const [suggestedTitles, setSuggestedTitles] = useState<string[]>([]);
 
   const editor = useEditor({
     extensions: [
@@ -253,11 +119,135 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
       Heading.configure({ levels: [1, 2, 3] }),
       BulletList, OrderedList, ListItem, Blockquote, HorizontalRule,
       Div, SpanMark, Image, 
-      Placeholder.configure({ placeholder: '在此处落笔您的灵感...' })
+      Placeholder.configure({ placeholder: '在此处落笔您的灵感，或者点击左侧“AI创作”快速生成内容...' })
     ],
-    content: longContent,
+    content: '',
     editorProps: { attributes: { class: 'prose prose-sm prose-blue max-w-none focus:outline-none' } },
+    onUpdate({ editor }) {
+      // 触发自动保存
+      saveToStorage(editor.getHTML());
+    }
   });
+
+  // 1. 初始化时从 LocalStorage 恢复
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_DRAFT_KEY);
+    if (saved) {
+      try {
+        const draft = JSON.parse(saved);
+        if (draft.title) setTitle(draft.title);
+        if (draft.summary) setSummary(draft.summary);
+        if (draft.coverImage) setCoverImage(draft.coverImage);
+        if (draft.bgId) {
+          const matchedBg = bgPresets.find(b => b.id === draft.bgId);
+          if (matchedBg) setActiveBg(matchedBg);
+        }
+        if (draft.brandId) {
+          const matchedBrand = brandPresets.find(b => b.id === draft.brandId);
+          if (matchedBrand) setActiveBrand(matchedBrand);
+        }
+        // 只有当 editor 初始化完成后再注入内容
+        if (editor && draft.content) {
+          editor.commands.setContent(draft.content);
+        }
+      } catch (e) {
+        console.error("Failed to restore draft", e);
+      }
+    }
+  }, [editor]);
+
+  // 2. 状态变化时自动保存（除了 content 之外的元数据）
+  useEffect(() => {
+    saveToStorage();
+  }, [title, summary, coverImage, activeBg, activeBrand]);
+
+  const saveToStorage = (currentContent?: string) => {
+    const content = currentContent || editor?.getHTML() || '';
+    const draft = {
+      title,
+      summary,
+      coverImage,
+      bgId: activeBg.id,
+      brandId: activeBrand.id,
+      content,
+      updatedAt: new Date().getTime()
+    };
+    localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(draft));
+  };
+
+  const toggleZenMode = () => {
+    setIsLeftCollapsed(!isLeftCollapsed);
+    setIsRightCollapsed(!isRightCollapsed);
+  };
+
+  // 处理 AI 标题生成
+  const handleGenerateTitles = async () => {
+    if (!aiIdea.trim()) return;
+    setAiLoadingStage('TITLES');
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `你是一位专业的新媒体运营总监，擅长写爆款标题。请根据用户的想法：'${aiIdea}'，给出 4 个具有吸引力的文章标题，涵盖不同的风格（如：专业严谨、情感共鸣、极客前沿、实用指南）。请仅返回 JSON 数组格式，例如 ["标题1", "标题2", "标题3", "标题4"]`,
+        config: { responseMimeType: "application/json" }
+      });
+      const titles = JSON.parse(response.text);
+      setSuggestedTitles(titles);
+    } catch (err) {
+      console.error(err);
+      alert('AI 标题生成失败，请重试。');
+    } finally {
+      setAiLoadingStage('IDLE');
+    }
+  };
+
+  // 处理 AI 全文生成
+  const handleGenerateFullArticle = async (selectedTitle: string) => {
+    setAiLoadingStage('GENERATING');
+    setTitle(selectedTitle);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: `你是一位全能的数字内容创作者。请为标题为《${selectedTitle}》的文章生成深度且排版优美的正文内容。
+        要求：
+        1. 使用 HTML 格式，包含 h2, h3, p, strong, blockquote 标签。
+        2. 内容要长且深度，分为 3-4 个章节。
+        3. 请根据文章主题建议一个背景底纹 ID（从 [w-1, w-grid-1, w-grid-2, w-paper-1, w-linen-1, w-gradient-1, w-dark-1, w-modern-1] 中选一个）和 封面关键词。
+        请返回如下 JSON 格式：
+        {
+          "html": "...",
+          "summary": "100字左右的摘要",
+          "suggestedBgId": "w-grid-1",
+          "coverKeywords": "tech, abstract, future"
+        }`,
+        config: { responseMimeType: "application/json" }
+      });
+      
+      const result = JSON.parse(response.text);
+      editor?.commands.setContent(result.html);
+      setSummary(result.summary);
+      
+      // 自动设置底纹
+      const matchedBg = bgPresets.find(b => b.id === result.suggestedBgId);
+      if (matchedBg) setActiveBg(matchedBg);
+      
+      // 自动生成封面图
+      setCoverImage(`https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=1200&sig=${Math.random()}`);
+      
+      // AI 生成后立即执行一次强制持久化
+      saveToStorage(result.html);
+
+      setIsAiModalOpen(false);
+      setAiIdea('');
+      setSuggestedTitles([]);
+    } catch (err) {
+      console.error(err);
+      alert('AI 文章生成失败，请重试。');
+    } finally {
+      setAiLoadingStage('IDLE');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-studio-bg font-sans overflow-hidden">
@@ -274,6 +264,13 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
            </button>
         </div>
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsAiModalOpen(true)}
+            className="px-6 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[18px] animate-pulse">auto_awesome</span>
+            AI 一键创作
+          </button>
           <button onClick={() => onPublish(editor?.getHTML() || '', title, activeBg, activeBrand)} className="px-6 py-2 bg-primary text-white text-[10px] font-black rounded-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest">
             预览并发布文章
           </button>
@@ -307,6 +304,77 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish }) => {
           />
         </div>
       </div>
+
+      {/* AI 创作弹窗 */}
+      {isAiModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" onClick={() => setIsAiModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-2xl rounded-[40px] shadow-2xl p-10 space-y-8 animate-in zoom-in-95 duration-300">
+            <header className="text-center space-y-2">
+               <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                 <span className="material-symbols-outlined text-4xl">auto_awesome</span>
+               </div>
+               <h2 className="text-2xl font-black text-studio-dark">AI 智能辅助创作</h2>
+               <p className="text-xs text-studio-sub font-medium">输入你的想法，Genix 将为你构建完整的叙事框架与排版。</p>
+            </header>
+
+            {aiLoadingStage === 'GENERATING' ? (
+              <div className="py-20 text-center space-y-6">
+                <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
+                <div className="space-y-1">
+                  <p className="text-sm font-black text-studio-dark animate-pulse">正在深度构建内容架构...</p>
+                  <p className="text-[10px] text-studio-sub font-bold uppercase tracking-widest">GEMINI 3 PRO IS THINKING</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">你的创作灵感</label>
+                  <textarea 
+                    value={aiIdea}
+                    onChange={(e) => setAiIdea(e.target.value)}
+                    className="w-full bg-studio-bg border-none rounded-3xl p-5 text-sm font-medium focus:ring-2 ring-indigo-500/20 h-32 resize-none"
+                    placeholder="例如：写一篇关于远程办公如何提升工作效率的文章，要有数据支撑..."
+                  />
+                </div>
+
+                {suggestedTitles.length > 0 ? (
+                  <div className="space-y-3 animate-in slide-in-from-bottom-4 duration-500">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">AI 推荐标题 (点击即可生成全文)</label>
+                    <div className="grid grid-cols-1 gap-2">
+                      {suggestedTitles.map((t, i) => (
+                        <button 
+                          key={i} 
+                          onClick={() => handleGenerateFullArticle(t)}
+                          className="w-full text-left p-4 bg-indigo-50/50 hover:bg-indigo-50 rounded-2xl border border-indigo-100/50 transition-all group"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-indigo-900 leading-tight">{t}</span>
+                            <span className="material-symbols-outlined text-indigo-300 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={handleGenerateTitles}
+                    disabled={!aiIdea || aiLoadingStage === 'TITLES'}
+                    className="w-full py-4 bg-indigo-600 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {aiLoadingStage === 'TITLES' ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="material-symbols-outlined">magic_button</span>}
+                    获取爆款标题
+                  </button>
+                )}
+              </div>
+            )}
+
+            <p className="text-center text-[9px] text-studio-sub font-bold uppercase tracking-widest">
+              基于 GEMINI 3 PRO 多模态引擎驱动
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

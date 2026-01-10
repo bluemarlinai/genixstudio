@@ -2,6 +2,9 @@
 import React from 'react';
 import { BackgroundPreset, DecorationPreset, BrandPreset, SnippetPreset, SidebarTab } from './EditorTypes';
 
+// 扩展 SidebarTab 类型包含 AI
+type ExtendedSidebarTab = SidebarTab | 'AI';
+
 interface LeftSidebarProps {
   activeTab: SidebarTab;
   setActiveTab: (tab: SidebarTab) => void;

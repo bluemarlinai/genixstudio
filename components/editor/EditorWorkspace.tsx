@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState, useRef } from 'react';
-/* Fixed: BubbleMenu is imported from @tiptap/react as the UI component */
+/* Fixed: BubbleMenu and EditorContent are standard exports from @tiptap/react for React applications */
 import { EditorContent, BubbleMenu } from '@tiptap/react';
 import { Editor } from '@tiptap/core';
 import { BackgroundPreset, BrandPreset } from './EditorTypes';
@@ -239,18 +240,21 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       {editor && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }} className="bubble-menu">
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => (editor.chain().focus() as any).toggleBold().run()}
             className={editor.isActive('bold') ? 'is-active' : ''}
           >
             <span className="material-symbols-outlined text-[18px]">format_bold</span>
           </button>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => (editor.chain().focus() as any).toggleItalic().run()}
             className={editor.isActive('italic') ? 'is-active' : ''}
           >
             <span className="material-symbols-outlined text-[18px]">format_italic</span>
           </button>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => (editor.chain().focus() as any).toggleStrike().run()}
             className={editor.isActive('strike') ? 'is-active' : ''}
           >
@@ -258,12 +262,14 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           </button>
           <div className="w-px h-4 bg-white/20 mx-1 self-center"></div>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => (editor.chain().focus() as any).toggleHeading({ level: 1 }).run()}
             className={editor.isActive('heading', { level: 1 }) ? 'is-active' : ''}
           >
             <span className="text-[10px] font-black px-1">H1</span>
           </button>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => (editor.chain().focus() as any).toggleHeading({ level: 2 }).run()}
             className={editor.isActive('heading', { level: 2 }) ? 'is-active' : ''}
           >
@@ -271,6 +277,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           </button>
           <div className="w-px h-4 bg-white/20 mx-1 self-center"></div>
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {}}
             className="text-primary"
           >
