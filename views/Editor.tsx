@@ -24,6 +24,7 @@ import { GoogleGenAI } from "@google/genai";
 
 const STORAGE_DRAFT_KEY = 'genix_editor_draft';
 
+// --- 类型定义 ---
 const SpanMark = Mark.create({
   name: 'span',
   priority: 100,
@@ -130,7 +131,49 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     const userModel = localStorage.getItem('user_gemini_model');
     const apiKey = userKey || process.env.API_KEY;
     const model = userModel || 'gemini-3-flash-preview';
-    return { apiKey, model };
+    
+    // 判断是否为第三方模型
+    const isThirdParty = model.includes('deepseek') || model.includes('glm') || model.includes('qwen');
+    let baseUrl = '';
+    if (model.includes('deepseek')) baseUrl = 'https://api.deepseek.com/v1';
+    else if (model.includes('glm')) baseUrl = 'https://open.bigmodel.cn/api/paas/v4';
+    else if (model.includes('qwen')) baseUrl = 'https://dashscope.aliyun.com/compatible-mode/v1';
+
+    return { apiKey, model, isThirdParty, baseUrl };
+  };
+
+  // 通用模型生成函数，支持 Google 和 OpenAI 兼容格式
+  const callAI = async (prompt: string, isJson: boolean = false) => {
+    const config = getAIConfig();
+    if (!config.apiKey) throw new Error('MISSING_KEY');
+
+    if (config.isThirdParty) {
+      // 使用 OpenAI 兼容格式请求
+      const response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: [{ role: 'user', content: prompt }],
+          response_format: isJson ? { type: 'json_object' } : undefined
+        })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+      return data.choices[0].message.content;
+    } else {
+      // 使用 Google SDK
+      const ai = new GoogleGenAI({ apiKey: config.apiKey });
+      const response = await ai.models.generateContent({
+        model: config.model,
+        contents: prompt,
+        config: isJson ? { responseMimeType: "application/json" } : undefined
+      });
+      return response.text;
+    }
   };
 
   useEffect(() => {
@@ -183,46 +226,31 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
 
   const handleGenerateTitles = async () => {
     if (!aiIdea.trim()) return;
-    const { apiKey, model } = getAIConfig();
-    if (!apiKey) {
-      setAiConfigError('未检测到有效的 API Key。请前往“个人设置”配置您的模型参数。');
-      return;
-    }
     setAiLoadingStage('TITLES');
     setAiConfigError(null);
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: `你是一位专业的新媒体运营总监，擅长写爆款标题。请根据用户的想法：'${aiIdea}'，给出 4 个具有吸引力的文章标题，涵盖不同的风格。请仅返回 JSON 数组格式，例如 ["标题1", "标题2", "标题3", "标题4"]`,
-        config: { responseMimeType: "application/json" }
-      });
-      const titles = JSON.parse(response.text || "[]");
+      const prompt = `你是一位专业的新媒体运营总监，擅长写爆款标题。请根据用户的想法：'${aiIdea}'，给出 4 个具有吸引力的文章标题，涵盖不同的风格。请仅返回 JSON 数组格式，例如 ["标题1", "标题2", "标题3", "标题4"]`;
+      const result = await callAI(prompt, true);
+      const titles = JSON.parse(result || "[]");
       setSuggestedTitles(titles);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setAiConfigError('AI 标题生成失败。请确认 API Key 是否有效。');
+      setAiConfigError(err.message === 'MISSING_KEY' ? '未检测到有效的 API Key。' : `AI 生成失败: ${err.message}`);
     } finally { setAiLoadingStage('IDLE'); }
   };
 
   const handleGenerateFullArticle = async (selectedTitle: string) => {
-    const { apiKey, model } = getAIConfig();
-    if (!apiKey) return;
     setAiLoadingStage('GENERATING');
     setTitle(selectedTitle);
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: `你是一位全能的数字内容创作者。请为标题为《${selectedTitle}》的文章生成深度且排版优美的正文内容。要求：1. 使用 HTML 格式。2. 内容要长且深度。3. 请根据文章主题建议一个背景底纹 ID。请返回如下 JSON 格式：{"html": "...", "summary": "...", "suggestedBgId": "w-grid-1"}`,
-        config: { responseMimeType: "application/json" }
-      });
-      const result = JSON.parse(response.text || "{}");
+      const prompt = `你是一位全能的数字内容创作者。请为标题为《${selectedTitle}》的文章生成深度且排版优美的正文内容。要求：1. 使用 HTML 格式。2. 内容要长且深度。3. 请根据文章主题建议一个背景底纹 ID（可选：w-grid-1, w-paper-1, w-noise-1, w-gradient-1）。请返回如下 JSON 格式：{"html": "...", "summary": "...", "suggestedBgId": "w-grid-1"}`;
+      const responseText = await callAI(prompt, true);
+      const result = JSON.parse(responseText || "{}");
       editor?.commands.setContent(result.html);
       setSummary(result.summary);
       const matchedBg = bgPresets.find(b => b.id === result.suggestedBgId);
       if (matchedBg) setActiveBg(matchedBg);
-      // 同时触发封面生成
+      // 封面生成依然优先使用 Gemini Image（因为这是目前唯一的图像模型）
       handleGenerateCover(selectedTitle, result.summary);
       saveToStorage(result.html);
       setIsAiModalOpen(false);
@@ -239,44 +267,33 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     const currentSummary = overrideSummary || summary || editor?.getText().slice(0, 100) || "";
     if (!currentTitle) return;
 
-    const { apiKey } = getAIConfig();
+    // 图像生成目前固定使用 Gemini 系列，需要检查默认 Key
+    const apiKey = localStorage.getItem('user_gemini_api_key') || process.env.API_KEY;
     if (!apiKey) return;
 
     setIsGeneratingCover(true);
     try {
       const ai = new GoogleGenAI({ apiKey });
-      
-      // Step 1: 分析并生成绘图提示词
       const promptResponse = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Analyze the following article title and summary to create a professional, artistic, and cinematic image generation prompt. 
-        Title: "${currentTitle}"
-        Summary: "${currentSummary}"
-        Requirements: The style should be modern, clean, and high-end editorial. No text in image. Focus on metaphors or symbolic imagery. Output only the English prompt.`,
+        contents: `Analyze: "${currentTitle}". Summary: "${currentSummary}". Create a professional cinematic image prompt (English, no text).`,
       });
       const visualPrompt = promptResponse.text || currentTitle;
 
-      // Step 2: 调用图像生成模型
       const imageResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: [{ text: visualPrompt }],
-        config: {
-          imageConfig: {
-            aspectRatio: "16:9",
-          }
-        }
+        config: { imageConfig: { aspectRatio: "16:9" } }
       });
 
       for (const part of imageResponse.candidates[0].content.parts) {
         if (part.inlineData) {
-          const base64Data = part.inlineData.data;
-          setCoverImage(`data:image/png;base64,${base64Data}`);
+          setCoverImage(`data:image/png;base64,${part.inlineData.data}`);
           break;
         }
       }
     } catch (err) {
       console.error("Cover generation failed", err);
-      alert("封面生成失败，请检查 API 状态。");
     } finally {
       setIsGeneratingCover(false);
     }
@@ -285,18 +302,11 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
   const handleGenerateSummary = async () => {
     const content = editor?.getText();
     if (!content || content.length < 50) return;
-
-    const { apiKey, model } = getAIConfig();
-    if (!apiKey) return;
-
     setIsGeneratingSummary(true);
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: model,
-        contents: `请根据以下文章内容，总结一段 100 字以内的摘要，要求语气专业且吸引人阅读：\n\n${content}`,
-      });
-      setSummary(response.text || "");
+      const prompt = `请根据以下文章内容，总结一段 100 字以内的摘要，要求语气专业且吸引人：\n\n${content}`;
+      const result = await callAI(prompt);
+      setSummary(result || "");
     } catch (err) {
       console.error(err);
     } finally {
@@ -335,7 +345,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
           </div>
         </div>
 
-        {/* 禅意模式切换按钮 */}
         <div className="absolute left-1/2 -translate-x-1/2">
           <button 
             onClick={toggleZenMode}
@@ -349,9 +358,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
               {isZenMode ? 'fullscreen_exit' : 'fullscreen'}
             </span>
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">禅意模式</span>
-            {isZenMode && (
-              <span className="absolute inset-0 bg-white/10 animate-pulse"></span>
-            )}
           </button>
         </div>
 
@@ -432,7 +438,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
               </div>
             )}
             <p className="text-center text-[9px] text-studio-sub font-bold uppercase tracking-widest">
-              基于 {getAIConfig().model.replace(/-latest|-preview|-reasoner/g, '').toUpperCase()} 引擎驱动
+              正在运行: {getAIConfig().model.toUpperCase()}
             </p>
           </div>
         </div>
