@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-/* Import EditorContent and BubbleMenu from @tiptap/react correctly */
+/* Import EditorContent and BubbleMenu from @tiptap/react */
+// Fix: BubbleMenu is a component exported from @tiptap/react
 import { EditorContent, BubbleMenu } from '@tiptap/react';
 import { Editor } from '@tiptap/core';
 import { BackgroundPreset, BrandPreset } from './EditorTypes';
@@ -57,7 +58,7 @@ const TableOfContents: React.FC<{ editor: Editor | null }> = ({ editor }) => {
   };
 
   return (
-    <div className="sticky top-24 w-60 shrink-0 hidden xl:block z-20 h-fit">
+    <div className="w-full shrink-0 z-20 h-fit">
       <div className="bg-white/60 backdrop-blur-xl border border-studio-border rounded-[28px] p-5 shadow-sm space-y-4 animate-in fade-in slide-in-from-left-4 duration-700">
         <div className="flex items-center gap-2 border-b border-studio-border pb-3">
           <span className="material-symbols-outlined text-[16px] text-primary font-bold">toc</span>
@@ -375,7 +376,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   };
 
   /**
-   * 一键排版：AI 自动美化全文
+   * 一键排版：AI 自动美美全文
    */
   const handleAutoLayout = async () => {
     const content = editor.getHTML();
@@ -409,7 +410,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       
       {/* 
           BubbleMenu component is used here to display a floating toolbar when text is selected.
-          FIX: Corrected import from '@tiptap/react' and using it as a component.
+          Imported from @tiptap/react.
       */}
       {editor && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
@@ -509,7 +510,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
       <div className="flex w-full max-w-[1440px] items-start justify-center gap-12 px-12 mt-8">
         
-        {showToc && <TableOfContents editor={editor} />}
+        {/* 固定宽度的左侧容器，确保主体不发生横移 */}
+        <div className="w-60 shrink-0 hidden xl:block sticky top-24">
+           {showToc && <TableOfContents editor={editor} />}
+        </div>
 
         {/* 2. ARTICLE CANVAS */}
         <div 
@@ -545,6 +549,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           </div>
         </div>
 
+        {/* 固定宽度的右侧容器，维持中心对齐平衡 */}
         <div className="w-60 shrink-0 hidden xl:block"></div>
 
       </div>

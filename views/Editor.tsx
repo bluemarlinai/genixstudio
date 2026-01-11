@@ -166,7 +166,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       return data.choices[0].message.content;
     } else {
       // 使用 Google SDK
-      // FIX: Use named parameter for apiKey during initialization
       const ai = new GoogleGenAI({ apiKey: config.apiKey });
       const response = await ai.models.generateContent({
         model: config.model,
@@ -274,7 +273,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
 
     setIsGeneratingCover(true);
     try {
-      // FIX: Use named parameter for apiKey during initialization
       const ai = new GoogleGenAI({ apiKey });
       const promptResponse = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -356,7 +354,8 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
                 : 'bg-white text-studio-sub border-studio-border hover:border-primary/40 hover:text-primary'
             }`}
           >
-            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 ${isZenMode ? 'rotate-180' : 'rotate-0'}`}>
+            {/* 图标增加了 group-hover:rotate-180 动效，且无论是否处于禅意模式，hover 都会触发旋转 */}
+            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 group-hover:rotate-180 ${isZenMode ? 'rotate-180' : 'rotate-0'}`}>
               {isZenMode ? 'fullscreen_exit' : 'fullscreen'}
             </span>
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">禅意模式</span>
