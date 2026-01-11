@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-/* Import EditorContent and BubbleMenu from @tiptap/react */
+// BubbleMenu is imported correctly from @tiptap/react as per standard Tiptap usage
 import { EditorContent, BubbleMenu } from '@tiptap/react';
 import { Editor } from '@tiptap/core';
 import { BackgroundPreset, BrandPreset } from './EditorTypes';

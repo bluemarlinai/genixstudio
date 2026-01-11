@@ -355,13 +355,13 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
             }`}
           >
             {/* 
-                图标动效逻辑优化：
+                图标旋转动效优化：
                 1. 基础状态旋转 (isZenMode ? 'rotate-180' : 'rotate-0')
-                2. Hover 状态在基础状态上增加 180 度。
-                   - 非激活时：0 -> 180
-                   - 激活时：180 -> 360
+                2. Hover 时，基于当前状态再顺时针旋转 180 度。
+                   - 非激活时 (0deg): hover 旋转至 180deg
+                   - 激活时 (180deg): hover 旋转至 360deg
             */}
-            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 ${
+            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 ease-in-out ${
               isZenMode 
                 ? 'rotate-180 group-hover:rotate-[360deg]' 
                 : 'rotate-0 group-hover:rotate-180'
@@ -378,7 +378,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
         <div className={`transition-all duration-500 ease-in-out overflow-hidden border-r border-studio-border bg-white ${isLeftCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-[240px] opacity-100'}`}>
           <LeftSidebar 
             activeTab={activeTab} setActiveTab={setActiveTab}
