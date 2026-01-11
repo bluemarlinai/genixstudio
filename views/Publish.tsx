@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BackgroundPreset, BrandPreset } from '../components/editor/EditorTypes';
 
 interface PublishProps {
@@ -13,10 +13,37 @@ interface PublishProps {
 
 const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, onSuccess }) => {
   const [isPublishing, setIsPublishing] = useState(false);
-  const [selectedTime, setSelectedTime] = useState<'now' | 'scheduled'>('now');
   const [device, setDevice] = useState<'mobile' | 'pc'>('mobile');
   const [copyStatus, setCopyStatus] = useState<'IDLE' | 'WECHAT_COPIED' | 'TOUTIAO_COPIED' | 'ERROR'>('IDLE');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['wechat']);
+  
+  // 模拟器缩放逻辑
+  const [scale, setScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (device === 'mobile' && containerRef.current) {
+        const availableHeight = containerRef.current.offsetHeight;
+        const availableWidth = containerRef.current.offsetWidth;
+        const simulatorHeight = 820; // 模拟器原始设计高度
+        const simulatorWidth = 400;  // 模拟器原始设计宽度
+        
+        // 计算高度和宽度的缩放比，取最小值，并预留边距
+        const scaleH = (availableHeight - 60) / simulatorHeight;
+        const scaleW = (availableWidth - 40) / simulatorWidth;
+        const newScale = Math.min(scaleH, scaleW, 1); // 最大不超过1
+        
+        setScale(newScale);
+      } else {
+        setScale(1);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [device]);
 
   const togglePlatform = (id: string) => {
     setSelectedPlatforms(prev => 
@@ -37,9 +64,6 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
     return styleStr.replace(/([\d.]+)rem/g, (_, p1) => `${parseFloat(p1) * 16}px`);
   };
 
-  /**
-   * 微信公众号超高保真处理逻辑
-   */
   const processHtmlForWechat = (rawHtml: string) => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(rawHtml, 'text/html');
@@ -53,58 +77,24 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
       'strong': 'color: #1e293b; font-weight: bold !important;',
       'ul': 'list-style-type: disc; margin: 15px 0; padding-left: 25px;',
       'li': 'margin-bottom: 8px; font-size: 16px; color: #333333;',
-      // 核心修复：代码块样式
       'pre': 'background-color: #1e293b; border-radius: 12px; padding: 16px; margin: 20px 0; overflow-x: auto; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; line-height: 1.6; tab-size: 4;',
       'code': 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; background-color: rgba(30, 41, 59, 0.05); color: #475569; padding: 2px 4px; border-radius: 4px;'
     };
 
-    // 1. 处理底纹背景 (BG Styles)
     const bgStyleObj = bg?.style || {};
     let bgStyleStr = '';
     if (bgStyleObj.background) bgStyleStr += `background: ${bgStyleObj.background};`;
-    if (bgStyleObj.backgroundImage) {
-      const cleanImg = bgStyleObj.backgroundImage.replace(/"/g, "'");
-      bgStyleStr += `background-image: ${cleanImg};`;
-    }
+    if (bgStyleObj.backgroundImage) bgStyleStr += `background-image: ${bgStyleObj.backgroundImage.replace(/"/g, "'")};`;
     if (bgStyleObj.backgroundColor) bgStyleStr += `background-color: ${bgStyleObj.backgroundColor};`;
     if (bgStyleObj.backgroundSize) bgStyleStr += `background-size: ${bgStyleObj.backgroundSize};`;
-    if (bg?.class === 'bg-white') bgStyleStr += 'background-color: #ffffff;';
 
-    // 2. 处理装饰块 (Cards)
-    const blocks = doc.querySelectorAll('.decoration-block');
-    blocks.forEach(block => {
-      const innerDivs = block.querySelectorAll('div');
-      innerDivs.forEach(div => {
-        let style = div.getAttribute('style') || '';
-        style = remToPx(style);
-        div.setAttribute('style', `box-sizing: border-box !important; display: block; ${style}`);
-      });
-      const innerPs = block.querySelectorAll('p');
-      innerPs.forEach(p => {
-        let pStyle = p.getAttribute('style') || '';
-        pStyle = remToPx(pStyle);
-        p.setAttribute('style', `padding: 0 !important; margin: 0; ${pStyle}`);
-      });
-      let blockStyle = block.getAttribute('style') || '';
-      blockStyle = remToPx(blockStyle);
-      const section = doc.createElement('section');
-      section.innerHTML = block.innerHTML;
-      section.setAttribute('style', `box-sizing: border-box !important; width: 100% !important; margin: 20px 0; border-radius: 12px; overflow: hidden; ${blockStyle}`);
-      block.parentNode?.replaceChild(section, block);
-    });
-
-    // 3. 处理代码块 (Pre)
-    // 微信对 pre 支持不佳，我们将其转换为 section 以获得更稳定的背景渲染
     const preNodes = doc.querySelectorAll('pre');
     preNodes.forEach(pre => {
       const code = pre.querySelector('code');
       const codeText = code ? code.innerHTML : pre.innerHTML;
       const section = doc.createElement('section');
-      // 使用内联样式模拟深色代码背景
       section.setAttribute('style', styleMap['pre'] + ' display: block; white-space: pre-wrap; word-break: break-all;');
       section.innerHTML = `<code>${codeText}</code>`;
-      
-      // 内部 code 标签如果是作为 pre 的子级，不应该有背景色（背景由 section 承载）
       const innerCode = section.querySelector('code');
       if (innerCode) {
         innerCode.setAttribute('style', 'background: none !important; color: inherit !important; border: none !important; padding: 0 !important; font-family: inherit !important;');
@@ -112,84 +102,30 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
       pre.parentNode?.replaceChild(section, pre);
     });
 
-    // 4. 处理普通标签并应用 styleMap
     const allElements = doc.body.querySelectorAll('*');
     allElements.forEach(el => {
       const tagName = el.tagName.toLowerCase();
-      // 如果标签已经被转换为 section (例如 pre 转换的)，则跳过 styleMap 默认覆盖
       if (el.tagName === 'SECTION' && el.getAttribute('style')?.includes('#1e293b')) return;
-
-      const baseStyle = styleMap[tagName] || '';
-      let existingStyle = el.getAttribute('style') || '';
-      existingStyle = remToPx(existingStyle);
-      
-      const isProcessed = el.closest('section');
-      const finalStyle = isProcessed ? existingStyle : `${baseStyle}; ${existingStyle}`;
-      el.setAttribute('style', `box-sizing: border-box !important; max-width: 100% !important; ${finalStyle}`.trim());
-      el.removeAttribute('class');
-    });
-
-    // 构建最终 HTML
-    return `<section style="margin: 0; padding: 0; font-family: -apple-system-font,BlinkMacSystemFont,Helvetica Neue,PingFang SC,Hiragino Sans GB,Microsoft YaHei UI,Microsoft YaHei,Arial,sans-serif; width: 100%; box-sizing: border-box; ${bgStyleStr}"><section style="margin: 0; padding: 20px 15px; width: 100%; box-sizing: border-box !important; overflow: hidden; display: block;">${doc.body.innerHTML}<section style="margin: 40px 0 20px; text-align: center; color: #bbbbbb; font-size: 11px; letter-spacing: 2px;"><p style="margin: 0; opacity: 0.5; padding: 0;">POWERED BY GENIX STUDIO</p></section></section></section>`;
-  };
-
-  /**
-   * 今日头条专属 HTML 处理逻辑
-   */
-  const processHtmlForToutiao = (rawHtml: string) => {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(rawHtml, 'text/html');
-    
-    const styleMap: Record<string, string> = {
-      'h1': 'font-size: 24px; font-weight: bold; color: #222; margin-top: 24px; margin-bottom: 16px; line-height: 1.4;',
-      'h2': 'font-size: 20px; font-weight: bold; color: #222; margin-top: 22px; margin-bottom: 14px; border-left: 4px solid #f85959; padding-left: 10px; line-height: 1.4;',
-      'h3': 'font-size: 18px; font-weight: bold; color: #222; margin-top: 20px; margin-bottom: 12px; line-height: 1.4;',
-      'p': 'font-size: 16px; line-height: 1.8; color: #333; margin-top: 16px; margin-bottom: 16px; text-align: justify;',
-      'blockquote': 'border-left: 4px solid #e8e8e8; padding: 12px 16px; color: #666; background-color: #f4f5f6; margin: 20px 0;',
-      'strong': 'font-weight: bold; color: #000;',
-      'img': 'max-width: 100% !important; height: auto; display: block; margin: 20px auto; border-radius: 4px;',
-      'pre': 'background-color: #f4f5f6; border-radius: 4px; padding: 15px; margin: 20px 0; font-family: monospace; overflow-x: auto; font-size: 14px;'
-    };
-
-    const blocks = doc.querySelectorAll('.decoration-block');
-    blocks.forEach(block => {
-      const flatSection = doc.createElement('section');
-      let blockStyle = remToPx(block.getAttribute('style') || '');
-      flatSection.setAttribute('style', `margin: 20px 0; padding: 16px; background-color: #f8f8f8; border-radius: 8px; ${blockStyle}`);
-      flatSection.innerHTML = block.innerHTML;
-      block.parentNode?.replaceChild(flatSection, block);
-    });
-
-    const allElements = doc.body.querySelectorAll('*');
-    allElements.forEach(el => {
-      const tagName = el.tagName.toLowerCase();
       const baseStyle = styleMap[tagName] || '';
       let existingStyle = remToPx(el.getAttribute('style') || '');
-      el.setAttribute('style', `${baseStyle}; ${existingStyle}`.trim());
+      el.setAttribute('style', `box-sizing: border-box !important; max-width: 100% !important; ${baseStyle}; ${existingStyle}`.trim());
       el.removeAttribute('class');
     });
 
-    return `<div>${doc.body.innerHTML}</div>`;
+    return `<section style="margin: 0; padding: 20px 15px; box-sizing: border-box; ${bgStyleStr}">${doc.body.innerHTML}</section>`;
   };
 
   const handleCopy = async (platform: 'WECHAT' | 'TOUTIAO') => {
     try {
-      const processedHtml = platform === 'WECHAT' 
-        ? processHtmlForWechat(content) 
-        : processHtmlForToutiao(content);
-      
-      const plainText = title + '\n\n' + content.replace(/<[^>]*>/g, '');
+      const processedHtml = platform === 'WECHAT' ? processHtmlForWechat(content) : content;
       const htmlBlob = new Blob([processedHtml], { type: 'text/html' });
-      const textBlob = new Blob([plainText], { type: 'text/plain' });
+      const textBlob = new Blob([title + '\n\n' + content.replace(/<[^>]*>/g, '')], { type: 'text/plain' });
       const data = [new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })];
-      
       await navigator.clipboard.write(data);
       setCopyStatus(platform === 'WECHAT' ? 'WECHAT_COPIED' : 'TOUTIAO_COPIED');
       setTimeout(() => setCopyStatus('IDLE'), 3000);
     } catch (err) {
-      console.error('Copy failed:', err);
       setCopyStatus('ERROR');
-      setTimeout(() => setCopyStatus('IDLE'), 3000);
     }
   };
 
@@ -207,10 +143,7 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
             <span className="material-symbols-outlined text-[20px] group-hover:-translate-x-1 transition-transform">arrow_back</span>
             返回编辑
           </button>
-          <div className="w-px h-6 bg-studio-border"></div>
-          <h1 className="text-sm font-black text-studio-dark truncate max-w-xs uppercase tracking-widest">
-            {title || '发布预览'}
-          </h1>
+          <h1 className="text-sm font-black text-studio-dark truncate max-w-xs uppercase tracking-widest">{title || '发布预览'}</h1>
         </div>
 
         <div className="flex items-center gap-1 bg-studio-bg p-1 rounded-2xl border border-studio-border">
@@ -224,19 +157,22 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button onClick={handleFinalPublish} disabled={isPublishing} className="px-8 py-2.5 bg-primary text-white text-sm font-black rounded-xl shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">
-            {isPublishing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="material-symbols-outlined text-[20px]">rocket_launch</span>}
-            确认分发
-          </button>
-        </div>
+        <button onClick={handleFinalPublish} disabled={isPublishing} className="px-8 py-2.5 bg-primary text-white text-sm font-black rounded-xl shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest flex items-center gap-2">
+          {isPublishing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="material-symbols-outlined text-[20px]">rocket_launch</span>}
+          确认分发
+        </button>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <main className="flex-1 overflow-y-auto p-8 lg:p-12 flex justify-center bg-studio-bg relative">
-          <div className={`transition-all duration-700 ease-in-out ${device === 'mobile' ? 'w-[375px] h-[760px] rounded-[50px] border-[12px] border-studio-dark shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] bg-white overflow-hidden sticky top-0' : 'w-full max-w-4xl h-fit min-h-[600px] rounded-3xl border border-studio-border bg-white shadow-2xl overflow-hidden'}`}>
-            <div className="h-full flex flex-col relative rounded-[38px] bg-white">
-              <div className={`flex-1 overflow-y-auto p-0 ${device === 'pc' ? 'max-w-3xl mx-auto' : ''}`}>
+        <main ref={containerRef} className="flex-1 overflow-hidden p-6 flex items-center justify-center bg-studio-bg relative">
+          <div 
+            className={`transition-all duration-500 ease-in-out origin-center ${device === 'mobile' ? 'w-[375px] h-[760px] rounded-[50px] border-[12px] border-studio-dark shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] bg-white overflow-hidden' : 'w-full max-w-4xl h-full rounded-3xl border border-studio-border bg-white shadow-2xl overflow-hidden'}`}
+            style={{ 
+              transform: device === 'mobile' ? `scale(${scale})` : 'none',
+            }}
+          >
+            <div className="h-full flex flex-col relative bg-white">
+              <div className="flex-1 overflow-y-auto">
                 <ArticlePreviewContent mode={device} content={content} title={title} bg={bg} />
               </div>
             </div>
@@ -305,19 +241,15 @@ const ArticlePreviewContent: React.FC<{ mode: 'mobile' | 'pc', content: string, 
   const isMobile = mode === 'mobile';
   return (
     <div 
-      className={`animate-in fade-in duration-500 min-h-full ${isMobile ? 'pb-20' : ''} ${bg?.class || ''}`}
-      style={{
-        ...bg?.style,
-        backgroundRepeat: 'repeat',
-        backgroundSize: bg?.style?.backgroundImage && !bg?.style?.backgroundSize ? 'cover' : bg?.style?.backgroundSize || 'auto',
-      }}
+      className={`min-h-full ${isMobile ? 'pb-20' : ''} ${bg?.class || ''}`} 
+      style={{ ...bg?.style, backgroundRepeat: 'repeat' }}
     >
-      <div className={`${isMobile ? 'px-5 pt-6 pb-0' : 'p-12 pb-0'}`}>
-        <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2 py-1 rounded-md">高保真渲染预览</span>
-        <h1 className={`${isMobile ? 'text-2xl' : 'text-5xl'} font-black text-studio-dark mt-4 leading-tight tracking-tight`}>{title || '未命名文章'}</h1>
+      <div className={`${isMobile ? 'px-5 pt-6' : 'p-12'}`}>
+        <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2 py-1 rounded-md">渲染预览</span>
+        <h1 className={`${isMobile ? 'text-2xl' : 'text-5xl'} font-black text-studio-dark mt-4 leading-tight`}>{title || '未命名文章'}</h1>
       </div>
       <div 
-        className={`prose ${isMobile ? 'prose-sm px-5' : 'prose-lg px-12'} prose-blue max-w-none rendered-content py-6`} 
+        className={`prose ${isMobile ? 'prose-sm px-5' : 'prose-lg px-12'} prose-blue max-w-none py-6`} 
         dangerouslySetInnerHTML={{ __html: content }} 
       />
     </div>
