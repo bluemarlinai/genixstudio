@@ -1,7 +1,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 /* Import EditorContent and BubbleMenu from @tiptap/react */
-// Fix: BubbleMenu is a component exported from @tiptap/react
 import { EditorContent, BubbleMenu } from '@tiptap/react';
 import { Editor } from '@tiptap/core';
 import { BackgroundPreset, BrandPreset } from './EditorTypes';
@@ -210,6 +209,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [showTextColorPicker, setShowTextColorPicker] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [showToc, setShowToc] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const textColorPickerRef = useRef<HTMLDivElement>(null);
 
@@ -226,7 +226,31 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 监听滚动事件，决定是否显示返回顶部按钮
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (container.scrollTop > 300) {
+        setShowBackToTop(true);
+      } else {
+        setShowBackToTop(false);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
   if (!editor) return null;
+
+  const handleScrollToTop = () => {
+    scrollContainerRef.current?.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
 
   const ToolbarButton = ({ 
     onClick, 
@@ -552,6 +576,19 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         {/* 固定宽度的右侧容器，维持中心对齐平衡 */}
         <div className="w-60 shrink-0 hidden xl:block"></div>
 
+      </div>
+
+      {/* 3. BACK TO TOP BUTTON */}
+      <div className={`fixed bottom-8 right-8 z-[60] transition-all duration-500 transform ${showBackToTop ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'}`}>
+        <button
+          onClick={handleScrollToTop}
+          className="w-14 h-14 rounded-2xl bg-white/80 backdrop-blur-xl border border-studio-border shadow-[0_20px_40px_-12px_rgba(0,0,0,0.15)] flex items-center justify-center text-primary hover:text-primary-dark hover:-translate-y-1 active:scale-95 transition-all group"
+          title="返回顶部"
+        >
+          <span className="material-symbols-outlined text-[28px] font-black group-hover:animate-bounce-slow">arrow_upward</span>
+          {/* Subtle Glow Effect */}
+          <div className="absolute inset-0 rounded-2xl bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        </button>
       </div>
     </section>
   );

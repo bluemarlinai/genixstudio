@@ -354,8 +354,18 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
                 : 'bg-white text-studio-sub border-studio-border hover:border-primary/40 hover:text-primary'
             }`}
           >
-            {/* 图标增加了 group-hover:rotate-180 动效，且无论是否处于禅意模式，hover 都会触发旋转 */}
-            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 group-hover:rotate-180 ${isZenMode ? 'rotate-180' : 'rotate-0'}`}>
+            {/* 
+                图标动效逻辑优化：
+                1. 基础状态旋转 (isZenMode ? 'rotate-180' : 'rotate-0')
+                2. Hover 状态在基础状态上增加 180 度。
+                   - 非激活时：0 -> 180
+                   - 激活时：180 -> 360
+            */}
+            <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 ${
+              isZenMode 
+                ? 'rotate-180 group-hover:rotate-[360deg]' 
+                : 'rotate-0 group-hover:rotate-180'
+            }`}>
               {isZenMode ? 'fullscreen_exit' : 'fullscreen'}
             </span>
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">禅意模式</span>
