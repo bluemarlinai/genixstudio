@@ -166,6 +166,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       return data.choices[0].message.content;
     } else {
       // 使用 Google SDK
+      // FIX: Use named parameter for apiKey during initialization
       const ai = new GoogleGenAI({ apiKey: config.apiKey });
       const response = await ai.models.generateContent({
         model: config.model,
@@ -273,6 +274,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
 
     setIsGeneratingCover(true);
     try {
+      // FIX: Use named parameter for apiKey during initialization
       const ai = new GoogleGenAI({ apiKey });
       const promptResponse = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -382,7 +384,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
           />
         </div>
         <div className="flex-1 relative overflow-hidden flex flex-col">
-          <EditorWorkspace editor={editor} activeBg={activeBg} activeBrand={activeBrand} />
+          <EditorWorkspace editor={editor} activeBg={activeBg} activeBrand={activeBrand} callAI={callAI} />
         </div>
         <div className={`transition-all duration-500 ease-in-out overflow-hidden border-l border-studio-border bg-white ${isRightCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-[260px] opacity-100'}`}>
           <RightSidebar 
