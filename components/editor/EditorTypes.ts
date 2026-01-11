@@ -1,4 +1,6 @@
 
+import React from 'react';
+
 export type BackgroundPreset = {
   id: string;
   name: string;
