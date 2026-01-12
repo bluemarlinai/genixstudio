@@ -37,9 +37,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, []);
 
   return (
-    <div className="p-5 w-full space-y-5 animate-in fade-in duration-500 overflow-x-hidden">
+    <div className="p-5 w-full space-y-5 overflow-x-hidden">
       {showBanner && (
-        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex items-center justify-between animate-in slide-in-from-top duration-500">
+        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-primary text-white text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded shadow-sm">
               NEW

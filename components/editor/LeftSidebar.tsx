@@ -1,9 +1,10 @@
 
 import React from 'react';
 import { BackgroundPreset, DecorationPreset, BrandPreset, SnippetPreset, SidebarTab } from './EditorTypes';
-
-// 扩展 SidebarTab 类型包含 AI
-type ExtendedSidebarTab = SidebarTab | 'AI';
+import BackgroundLibrary from './libraries/BackgroundLibrary';
+import DecorationLibrary from './libraries/DecorationLibrary';
+import PresetLibrary from './libraries/PresetLibrary';
+import BrandLibrary from './libraries/BrandLibrary';
 
 interface LeftSidebarProps {
   activeTab: SidebarTab;
@@ -20,19 +21,6 @@ interface LeftSidebarProps {
   onInsertSnippet: (snippet: SnippetPreset) => void;
 }
 
-const ThumbnailRenderer = ({ value }: { value: string }) => {
-  const isUrl = value.startsWith('http') || value.startsWith('data:');
-  return (
-    <div className="w-full h-full relative bg-gray-50 flex items-center justify-center overflow-hidden">
-      {isUrl ? (
-        <img src={value} className="w-full h-full object-cover" alt="thumbnail" />
-      ) : (
-        <span className="material-symbols-outlined text-primary/30 text-[20px]">{value}</span>
-      )}
-    </div>
-  );
-};
-
 const LeftSidebar: React.FC<LeftSidebarProps> = ({
   activeTab,
   setActiveTab,
@@ -48,118 +36,58 @@ const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onInsertSnippet,
 }) => {
   return (
-    <aside className="w-[240px] bg-white border-r border-studio-border flex flex-col h-full z-30 shrink-0 overflow-hidden">
-      <nav className="flex border-b border-studio-border shrink-0 bg-white">
+    <aside className="w-[240px] bg-white border-r border-studio-border flex flex-col h-full z-30 shrink-0 overflow-hidden shadow-inner">
+      {/* 顶部标签栏 */}
+      <nav className="flex border-b border-studio-border shrink-0 bg-white sticky top-0 z-10">
         {(['BACKGROUND', 'DECORATION', 'PRESETS', 'BRAND'] as SidebarTab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest transition-all ${
+            className={`flex-1 py-3.5 text-[9px] font-black uppercase tracking-[0.15em] transition-all relative ${
               activeTab === tab 
-                ? 'text-primary bg-primary/5 border-b-2 border-primary' 
-                : 'text-studio-sub hover:bg-studio-bg'
+                ? 'text-primary' 
+                : 'text-studio-sub hover:text-studio-dark hover:bg-studio-bg/50'
             }`}
           >
             {tab === 'BACKGROUND' ? '底纹' : tab === 'DECORATION' ? '组件' : tab === 'PRESETS' ? '预设' : '品牌'}
+            {activeTab === tab && (
+              <div className="absolute bottom-0 left-1/4 right-1/4 h-[3px] bg-primary rounded-t-full animate-in fade-in zoom-in duration-300"></div>
+            )}
           </button>
         ))}
       </nav>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-thin scrollbar-thumb-gray-200">
+      {/* 主内容区域 - 物理拆分后的组件集合 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-hide">
         {activeTab === 'BACKGROUND' && (
-          <div className="space-y-4">
-            <h4 className="text-[8px] font-black text-gray-400 uppercase tracking-widest px-1">全景底纹库 ({bgPresets.length})</h4>
-            <div className="grid grid-cols-2 gap-2">
-              {bgPresets.map((bg) => (
-                <button
-                  key={bg.id}
-                  onClick={() => setActiveBg(bg)}
-                  className={`group flex flex-col items-center gap-2 p-1.5 rounded-xl border transition-all ${
-                    activeBg.id === bg.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-studio-border hover:bg-studio-bg'
-                  }`}
-                >
-                  <div className="w-full aspect-[3/2] rounded-lg overflow-hidden shrink-0 shadow-sm border border-studio-border/50">
-                    <ThumbnailRenderer value={bg.thumbnail} />
-                  </div>
-                  <span className="text-[9px] font-black text-studio-dark truncate w-full text-center tracking-tighter px-1">{bg.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <BackgroundLibrary items={bgPresets} activeId={activeBg.id} onSelect={setActiveBg} />
         )}
 
         {activeTab === 'DECORATION' && (
-          <div className="space-y-4">
-            <h4 className="text-[8px] font-black text-gray-400 uppercase tracking-widest px-1">排版组件库 ({decorationPresets.length})</h4>
-            <div className="grid grid-cols-1 gap-2">
-              {decorationPresets.map((dec) => (
-                <button
-                  key={dec.id}
-                  onClick={() => onInsertDecoration(dec)}
-                  className="group relative flex items-center justify-between p-2.5 rounded-xl border border-studio-border hover:border-primary hover:bg-primary/5 transition-all text-left bg-white overflow-hidden shadow-sm hover:shadow-md active:scale-95"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary/40">{dec.icon}</span>
-                    <span className="text-[9px] font-black uppercase">{dec.name}</span>
-                  </div>
-                  {dec.isVip && <span className="ml-2 text-orange-500 text-[7px] font-black border border-orange-200 px-1 rounded bg-orange-50 shrink-0">PRO</span>}
-                </button>
-              ))}
-            </div>
-          </div>
+          <DecorationLibrary items={decorationPresets} onInsert={onInsertDecoration} />
         )}
 
         {activeTab === 'PRESETS' && (
-          <div className="space-y-6">
-             <div className="space-y-3">
-                <h4 className="text-[8px] font-black text-gray-400 uppercase tracking-widest px-1">Header 眉标 / 导语</h4>
-                <div className="space-y-2">
-                  {snippetPresets.filter(s => s.type === 'HEADER').map(s => (
-                    <button key={s.id} onClick={() => onInsertSnippet(s)} className="w-full p-3 rounded-xl border border-studio-border bg-white hover:border-primary hover:bg-primary/[0.02] transition-all text-left group">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-gray-50 border border-studio-border flex items-center justify-center shrink-0">
-                          <span className="material-symbols-outlined text-primary/30">{s.icon}</span>
-                        </div>
-                        <div className="flex-1 truncate"><p className="text-[10px] font-black text-studio-dark">{s.name}</p><p className="text-[8px] text-studio-sub font-bold uppercase tracking-tighter">顶部追加</p></div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-             </div>
-          </div>
+          <PresetLibrary items={snippetPresets} onInsert={onInsertSnippet} />
         )}
 
         {activeTab === 'BRAND' && (
-          <div className="space-y-4">
-            <h4 className="text-[8px] font-black text-gray-400 uppercase tracking-widest px-1">品牌水印预设</h4>
-            <div className="grid grid-cols-2 gap-2">
-              {brandPresets.map((brand) => (
-                <button
-                  key={brand.id}
-                  onClick={() => setActiveBrand(brand)}
-                  className={`w-full flex flex-col items-center gap-2 p-2 rounded-xl border transition-all ${
-                    activeBrand.id === brand.id ? 'border-primary bg-primary/5 shadow-sm' : 'border-studio-border hover:bg-studio-bg'
-                  }`}
-                >
-                  <div className="w-full aspect-square rounded-lg overflow-hidden shrink-0 shadow-sm flex items-center justify-center bg-gray-50 border border-studio-border/50">
-                    <span className="material-symbols-outlined text-primary/30 text-[24px]">{brand.icon}</span>
-                  </div>
-                  <span className="text-[9px] font-black text-studio-dark truncate w-full text-center tracking-tighter px-1">{brand.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          <BrandLibrary items={brandPresets} activeId={activeBrand.id} onSelect={setActiveBrand} />
         )}
       </div>
 
+      {/* 底部状态条 */}
       <div className="p-3 border-t border-studio-border bg-gray-50/50 shrink-0">
-         <div className="p-2.5 bg-white rounded-xl border border-studio-border shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-2">
-               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-               <span className="text-[9px] font-black uppercase text-studio-sub tracking-widest">LIVE SYNCING</span>
-            </div>
-            <span className="material-symbols-outlined text-[14px] text-gray-300">cloud_done</span>
-         </div>
+        <div className="p-2.5 bg-white/80 backdrop-blur rounded-[14px] border border-studio-border shadow-sm flex items-center justify-between group">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[9px] font-black uppercase text-studio-sub tracking-[0.1em] group-hover:text-studio-dark transition-colors">实时同步激活</span>
+          </div>
+          <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-primary transition-colors">cloud_done</span>
+        </div>
       </div>
     </aside>
   );

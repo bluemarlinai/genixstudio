@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN" class="light">
 <head>
@@ -75,6 +76,20 @@
         height: 0;
       }
 
+      /* 强制重置装饰组件内部元素的样式，对抗 Tiptap/Prose 默认样式 */
+      .dec-tight-reset p {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        line-height: 1.2 !important;
+      }
+      .dec-tight-reset img {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        display: block !important;
+      }
+
       .bubble-menu {
         display: flex;
         background-color: #111418;
@@ -123,17 +138,18 @@
     "@tiptap/starter-kit": "https://esm.sh/@tiptap/starter-kit@^2.11.5",
     "@tiptap/extension-placeholder": "https://esm.sh/@tiptap/extension-placeholder@^2.11.5",
     "@tiptap/extension-bubble-menu": "https://esm.sh/@tiptap/extension-bubble-menu@^2.11.5",
-    "@tiptap/core": "https://esm.sh/@tiptap/core@^3.15.0",
-    "@tiptap/extension-bold": "https://esm.sh/@tiptap/extension-bold@^3.15.3",
-    "@tiptap/extension-italic": "https://esm.sh/@tiptap/extension-italic@^3.15.3",
-    "@tiptap/extension-strike": "https://esm.sh/@tiptap/extension-strike@^3.15.3",
-    "@tiptap/extension-code": "https://esm.sh/@tiptap/extension-code@^3.15.3",
-    "@tiptap/extension-heading": "https://esm.sh/@tiptap/extension-heading@^3.15.3",
-    "@tiptap/extension-bullet-list": "https://esm.sh/@tiptap/extension-bullet-list@^3.15.3",
-    "@tiptap/extension-ordered-list": "https://esm.sh/@tiptap/extension-ordered-list@^3.15.3",
-    "@tiptap/extension-blockquote": "https://esm.sh/@tiptap/extension-blockquote@^3.15.3",
-    "@tiptap/extension-horizontal-rule": "https://esm.sh/@tiptap/extension-horizontal-rule@^3.15.3",
-    "@tiptap/extension-list-item": "https://esm.sh/@tiptap/extension-list-item@^3.15.3"
+    "@tiptap/extension-core": "https://esm.sh/@tiptap/core@^2.11.5",
+    "@tiptap/core": "https://esm.sh/@tiptap/core@^2.11.5",
+    "@tiptap/extension-bold": "https://esm.sh/@tiptap/extension-bold@^2.11.5",
+    "@tiptap/extension-italic": "https://esm.sh/@tiptap/extension-italic@^2.11.5",
+    "@tiptap/extension-strike": "https://esm.sh/@tiptap/extension-strike@^2.11.5",
+    "@tiptap/extension-code": "https://esm.sh/@tiptap/extension-code@^2.11.5",
+    "@tiptap/extension-heading": "https://esm.sh/@tiptap/extension-heading@^2.11.5",
+    "@tiptap/extension-bullet-list": "https://esm.sh/@tiptap/extension-bullet-list@^2.11.5",
+    "@tiptap/extension-ordered-list": "https://esm.sh/@tiptap/extension-ordered-list@^2.11.5",
+    "@tiptap/extension-blockquote": "https://esm.sh/@tiptap/extension-blockquote@^2.11.5",
+    "@tiptap/extension-horizontal-rule": "https://esm.sh/@tiptap/extension-horizontal-rule@^2.11.5",
+    "@tiptap/extension-list-item": "https://esm.sh/@tiptap/extension-list-item@^2.11.5"
   }
 }
 </script>

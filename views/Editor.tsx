@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEditor } from '@tiptap/react';
 import { Node, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -22,7 +22,57 @@ import RightSidebar from '../components/editor/RightSidebar';
 import EditorWorkspace from '../components/editor/EditorWorkspace';
 import { GoogleGenAI } from "@google/genai";
 
-const STORAGE_DRAFT_KEY = 'genix_editor_draft';
+const STORAGE_DRAFT_KEY = 'genix_editor_draft'; // 仅用于迁移检查
+
+// --- IndexedDB Helper Utilities ---
+const DB_NAME = 'GenixStudioDB';
+const STORE_NAME = 'drafts';
+const DRAFT_ID = 'current_draft';
+
+const initDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+  });
+};
+
+const saveDraftToIDB = async (data: any) => {
+  try {
+    const db = await initDB();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.put(data, DRAFT_ID);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.error("IDB Save Failed:", err);
+  }
+};
+
+const loadDraftFromIDB = async (): Promise<any> => {
+  try {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(DRAFT_ID);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.error("IDB Load Failed:", err);
+    return null;
+  }
+};
 
 // --- 类型定义 ---
 const SpanMark = Mark.create({
@@ -57,7 +107,20 @@ const Div = Node.create({
   group: 'block',
   content: 'block+',
   defining: true,
-  addAttributes() { return { class: { default: null }, style: { default: null } }; },
+  addAttributes() { 
+    return { 
+      class: { default: null }, 
+      style: { default: null },
+      contenteditable: {
+        default: null,
+        parseHTML: element => element.getAttribute('contenteditable'),
+        renderHTML: attributes => {
+          if (!attributes.contenteditable) return {};
+          return { contenteditable: attributes.contenteditable };
+        },
+      }
+    }; 
+  },
   parseHTML() { 
     return [{ 
       tag: 'div',
@@ -92,12 +155,19 @@ interface EditorProps {
 }
 
 const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal }) => {
+  // 核心状态
+  const [isEditorReady, setIsEditorReady] = useState(false);
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'SAVED' | 'SAVING' | 'ERROR'>('SAVED');
+  
   const [title, setTitle] = useState('未命名文章');
   const [summary, setSummary] = useState('');
   const [coverImage, setCoverImage] = useState('https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&q=80&w=800');
+  
   const [activeTab, setActiveTab] = useState<SidebarTab>('BACKGROUND');
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = useState(false);
+  
   const [activeBg, setActiveBg] = useState<BackgroundPreset>(bgPresets[0]);
   const [activeBrand, setActiveBrand] = useState<BrandPreset>(brandPresets[0]);
   
@@ -111,6 +181,35 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isTitleCopied, setIsTitleCopied] = useState(false);
 
+  // 使用 Ref 追踪最新的状态，避免闭包问题
+  const stateRef = useRef({ title, summary, coverImage, activeBg, activeBrand });
+  useEffect(() => {
+    stateRef.current = { title, summary, coverImage, activeBg, activeBrand };
+  }, [title, summary, coverImage, activeBg, activeBrand]);
+
+  // 核心保存逻辑
+  const saveToStorage = async (currentContent?: string) => {
+    if (!isEditorReady || !isDraftLoaded) return; // 必须等初始加载完成
+    
+    setSaveStatus('SAVING');
+    try {
+      const content = currentContent !== undefined ? currentContent : (editor?.getHTML() || '');
+      const { title, summary, coverImage, activeBg, activeBrand } = stateRef.current;
+      
+      const draftData = {
+        title, summary, coverImage,
+        bgId: activeBg.id, brandId: activeBrand.id, content,
+        updatedAt: new Date().getTime()
+      };
+      
+      await saveDraftToIDB(draftData);
+      setSaveStatus('SAVED');
+    } catch (err) {
+      console.warn('Storage save failed:', err);
+      setSaveStatus('ERROR');
+    }
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit, Bold, Italic, Strike, Code,
@@ -119,12 +218,72 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       Div, SpanMark, Image, 
       Placeholder.configure({ placeholder: '在此处落笔您的灵感，或者点击“AI一键创作”快速生成内容...' })
     ],
-    content: '',
+    content: '', // 初始为空，等待 IndexedDB 加载
     editorProps: { attributes: { class: 'prose prose-sm prose-blue max-w-none focus:outline-none' } },
+    onCreate() {
+      setIsEditorReady(true);
+    },
     onUpdate({ editor }) {
       saveToStorage(editor.getHTML());
     }
   });
+
+  // 核心加载逻辑：组件挂载后从 IDB 读取数据
+  useEffect(() => {
+    if (!editor) return;
+
+    const initData = async () => {
+      let data = await loadDraftFromIDB();
+
+      // 迁移策略：如果 IDB 为空，检查 LocalStorage
+      if (!data) {
+        const localData = localStorage.getItem(STORAGE_DRAFT_KEY);
+        if (localData) {
+          try {
+            data = JSON.parse(localData);
+            console.log("Migrating draft from LocalStorage to IndexedDB...");
+          } catch (e) { console.error("Migration failed", e); }
+        }
+      }
+
+      if (data) {
+        // 恢复元数据
+        if (data.title) setTitle(data.title);
+        if (data.summary) setSummary(data.summary);
+        if (data.coverImage) setCoverImage(data.coverImage);
+        if (data.bgId) {
+          const b = bgPresets.find(i => i.id === data.bgId);
+          if (b) setActiveBg(b);
+        }
+        if (data.brandId) {
+          const b = brandPresets.find(i => i.id === data.brandId);
+          if (b) setActiveBrand(b);
+        }
+        // 恢复内容
+        if (data.content) {
+          editor.commands.setContent(data.content);
+        }
+        // 更新 ref 以便立即保存是正确的
+        stateRef.current = { 
+            title: data.title || title, 
+            summary: data.summary || summary, 
+            coverImage: data.coverImage || coverImage, 
+            activeBg: bgPresets.find(i => i.id === data.bgId) || activeBg, 
+            activeBrand: brandPresets.find(i => i.id === data.brandId) || activeBrand
+        };
+      }
+      setIsDraftLoaded(true);
+    };
+
+    initData();
+  }, [editor]);
+
+  // 当元数据变化时触发保存
+  useEffect(() => {
+    if (editor && isEditorReady && isDraftLoaded) {
+      saveToStorage();
+    }
+  }, [title, summary, coverImage, activeBg, activeBrand]);
 
   const getAIConfig = () => {
     const userKey = localStorage.getItem('user_gemini_api_key');
@@ -132,7 +291,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     const apiKey = userKey || process.env.API_KEY;
     const model = userModel || 'gemini-3-flash-preview';
     
-    // 判断是否为第三方模型
     const isThirdParty = model.includes('deepseek') || model.includes('glm') || model.includes('qwen');
     let baseUrl = '';
     if (model.includes('deepseek')) baseUrl = 'https://api.deepseek.com/v1';
@@ -142,13 +300,11 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     return { apiKey, model, isThirdParty, baseUrl };
   };
 
-  // 通用模型生成函数，支持 Google 和 OpenAI 兼容格式
   const callAI = async (prompt: string, isJson: boolean = false) => {
     const config = getAIConfig();
     if (!config.apiKey) throw new Error('MISSING_KEY');
 
     if (config.isThirdParty) {
-      // 使用 OpenAI 兼容格式请求
       const response = await fetch(`${config.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -165,7 +321,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       if (data.error) throw new Error(data.error.message);
       return data.choices[0].message.content;
     } else {
-      // 使用 Google SDK
       const ai = new GoogleGenAI({ apiKey: config.apiKey });
       const response = await ai.models.generateContent({
         model: config.model,
@@ -174,43 +329,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       });
       return response.text;
     }
-  };
-
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_DRAFT_KEY);
-    if (saved) {
-      try {
-        const draft = JSON.parse(saved);
-        if (draft.title) setTitle(draft.title);
-        if (draft.summary) setSummary(draft.summary);
-        if (draft.coverImage) setCoverImage(draft.coverImage);
-        if (draft.bgId) {
-          const matchedBg = bgPresets.find(b => b.id === draft.bgId);
-          if (matchedBg) setActiveBg(matchedBg);
-        }
-        if (draft.brandId) {
-          const matchedBrand = brandPresets.find(b => b.id === draft.brandId);
-          if (matchedBrand) setActiveBrand(matchedBrand);
-        }
-        if (editor && draft.content) {
-          editor.commands.setContent(draft.content);
-        }
-      } catch (e) { console.error("Failed to restore draft", e); }
-    }
-  }, [editor]);
-
-  useEffect(() => {
-    saveToStorage();
-  }, [title, summary, coverImage, activeBg, activeBrand]);
-
-  const saveToStorage = (currentContent?: string) => {
-    const content = currentContent || editor?.getHTML() || '';
-    const draft = {
-      title, summary, coverImage,
-      bgId: activeBg.id, brandId: activeBrand.id, content,
-      updatedAt: new Date().getTime()
-    };
-    localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(draft));
   };
 
   const handleCopyTitle = () => {
@@ -246,13 +364,21 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       const prompt = `你是一位全能的数字内容创作者。请为标题为《${selectedTitle}》的文章生成深度且排版优美的正文内容。要求：1. 使用 HTML 格式。2. 内容要长且深度。3. 请根据文章主题建议一个背景底纹 ID（可选：w-grid-1, w-paper-1, w-noise-1, w-gradient-1）。请返回如下 JSON 格式：{"html": "...", "summary": "...", "suggestedBgId": "w-grid-1"}`;
       const responseText = await callAI(prompt, true);
       const result = JSON.parse(responseText || "{}");
+      
+      // 更新内容
       editor?.commands.setContent(result.html);
       setSummary(result.summary);
       const matchedBg = bgPresets.find(b => b.id === result.suggestedBgId);
       if (matchedBg) setActiveBg(matchedBg);
-      // 封面生成依然优先使用 Gemini Image（因为这是目前唯一的图像模型）
+      
+      // 触发封面生成
       handleGenerateCover(selectedTitle, result.summary);
-      saveToStorage(result.html);
+      
+      // 立即更新Ref并强制保存
+      const newState = { title: selectedTitle, summary: result.summary, coverImage, activeBg: matchedBg || activeBg, activeBrand };
+      stateRef.current = newState;
+      await saveToStorage(result.html);
+      
       setIsAiModalOpen(false);
       setAiIdea('');
       setSuggestedTitles([]);
@@ -267,7 +393,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     const currentSummary = overrideSummary || summary || editor?.getText().slice(0, 100) || "";
     if (!currentTitle) return;
 
-    // 图像生成目前固定使用 Gemini 系列，需要检查默认 Key
     const apiKey = localStorage.getItem('user_gemini_api_key') || process.env.API_KEY;
     if (!apiKey) return;
 
@@ -288,7 +413,11 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
 
       for (const part of imageResponse.candidates[0].content.parts) {
         if (part.inlineData) {
-          setCoverImage(`data:image/png;base64,${part.inlineData.data}`);
+          const newData = `data:image/png;base64,${part.inlineData.data}`;
+          setCoverImage(newData);
+          // 封面更新后立即触发一次保存
+          stateRef.current = { ...stateRef.current, coverImage: newData };
+          await saveToStorage();
           break;
         }
       }
@@ -319,6 +448,16 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     setIsRightCollapsed(!isRightCollapsed);
   };
 
+  const handleNavigatePublish = async () => {
+    const currentContent = editor?.getHTML() || '';
+    try {
+       await saveToStorage(currentContent);
+    } catch (e) {
+      console.error("Save failed during navigate", e);
+    }
+    onPublish(currentContent, title, activeBg, activeBrand);
+  };
+
   const isZenMode = isLeftCollapsed && isRightCollapsed;
 
   return (
@@ -332,16 +471,15 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
               value={title} 
               onChange={(e) => setTitle(e.target.value)} 
               onDoubleClick={handleTitleDoubleClick}
-              className="bg-transparent border-none text-[11px] font-black text-studio-dark w-[350px] focus:ring-0 p-0" 
+              className="bg-transparent border-none text-[11px] font-black text-studio-dark w-[300px] focus:ring-0 p-0" 
               placeholder="文章标题..." 
             />
-            <button 
-              onClick={handleCopyTitle}
-              className={`p-1 rounded-md transition-all ${isTitleCopied ? 'text-emerald-500 bg-emerald-50' : 'text-studio-sub hover:bg-studio-bg hover:text-primary opacity-0 group-hover/title:opacity-100'}`}
-              title="复制标题"
-            >
-              <span className="material-symbols-outlined text-[16px]">{isTitleCopied ? 'done' : 'content_copy'}</span>
-            </button>
+            {/* 保存状态指示器 */}
+            <div className="ml-2 flex items-center gap-1">
+               {saveStatus === 'SAVING' && <span className="text-[9px] text-primary flex items-center gap-1"><div className="w-2 h-2 rounded-full border border-primary border-t-transparent animate-spin"></div>Saving...</span>}
+               {saveStatus === 'SAVED' && <span className="text-[9px] text-gray-300 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">cloud_done</span></span>}
+               {saveStatus === 'ERROR' && <span className="text-[9px] text-red-400 flex items-center gap-1" title="存储空间不足"><span className="material-symbols-outlined text-[12px]">cloud_off</span></span>}
+            </div>
           </div>
         </div>
 
@@ -354,13 +492,6 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
                 : 'bg-white text-studio-sub border-studio-border hover:border-primary/40 hover:text-primary'
             }`}
           >
-            {/* 
-                图标旋转动效优化：
-                1. 基础状态旋转 (isZenMode ? 'rotate-180' : 'rotate-0')
-                2. Hover 时，基于当前状态再顺时针旋转 180 度。
-                   - 非激活时 (0deg): hover 旋转至 180deg
-                   - 激活时 (180deg): hover 旋转至 360deg
-            */}
             <span className={`material-symbols-outlined text-[20px] transition-transform duration-700 ease-in-out ${
               isZenMode 
                 ? 'rotate-180 group-hover:rotate-[360deg]' 
@@ -374,7 +505,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
 
         <div className="flex items-center gap-3">
           <button onClick={() => setIsAiModalOpen(true)} className="px-6 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-black rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-2 h-[36px]"><span className="material-symbols-outlined text-[18px] animate-pulse">auto_awesome</span>AI 一键创作</button>
-          <button onClick={() => onPublish(editor?.getHTML() || '', title, activeBg, activeBrand)} className="px-6 py-2 bg-primary text-white text-[10px] font-black rounded-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest h-[36px]">预览并发布文章</button>
+          <button onClick={handleNavigatePublish} className="px-6 py-2 bg-primary text-white text-[10px] font-black rounded-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all uppercase tracking-widest h-[36px]">预览并发布文章</button>
         </div>
       </header>
 
@@ -393,6 +524,14 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
           />
         </div>
         <div className="flex-1 relative overflow-hidden flex flex-col">
+          {!isDraftLoaded && (
+             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                  <p className="text-xs font-bold text-studio-sub">正在从数据库恢复草稿...</p>
+                </div>
+             </div>
+          )}
           <EditorWorkspace editor={editor} activeBg={activeBg} activeBrand={activeBrand} callAI={callAI} />
         </div>
         <div className={`transition-all duration-500 ease-in-out overflow-hidden border-l border-studio-border bg-white ${isRightCollapsed ? 'w-0 opacity-0 pointer-events-none' : 'w-[260px] opacity-100'}`}>
