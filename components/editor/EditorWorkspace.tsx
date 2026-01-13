@@ -194,6 +194,32 @@ const TextColorPicker = ({ onSelect }: { onSelect: (color: string) => void }) =>
   );
 };
 
+const EmojiPicker = ({ onSelect }: { onSelect: (emoji: string) => void }) => {
+  const commonEmojis = [
+    '😀', '😂', '😍', '🤔', '😭', '😡', '👍', '👎', 
+    '🎉', '🔥', '❤️', '🚀', '👀', '✅', '❌', '✨', 
+    '💯', '🤝', '💡', '📌', '📝', '💪', '🙏', '👻',
+    '🌈', '⚡', '⭐', '🌟', '💫', '💥', '💢', '💦'
+  ];
+
+  return (
+    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 p-3 bg-white border border-studio-border rounded-2xl shadow-2xl z-[100] w-64 animate-in fade-in zoom-in-95 duration-200">
+        <div className="grid grid-cols-8 gap-1">
+        {commonEmojis.map(emoji => (
+            <button
+            key={emoji}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onSelect(emoji)}
+            className="w-6 h-6 rounded hover:bg-studio-bg flex items-center justify-center text-sm transition-colors cursor-pointer"
+            >
+            {emoji}
+            </button>
+        ))}
+        </div>
+    </div>
+  );
+};
+
 const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   editor,
   activeBg,
@@ -206,6 +232,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [showAlignMenu, setShowAlignMenu] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showHeadingMenu, setShowHeadingMenu] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [showToc, setShowToc] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -215,6 +242,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const alignMenuRef = useRef<HTMLDivElement>(null);
   const sizeMenuRef = useRef<HTMLDivElement>(null);
   const headingMenuRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -224,6 +252,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       if (alignMenuRef.current && !alignMenuRef.current.contains(target)) setShowAlignMenu(false);
       if (sizeMenuRef.current && !sizeMenuRef.current.contains(target)) setShowSizeMenu(false);
       if (headingMenuRef.current && !headingMenuRef.current.contains(target)) setShowHeadingMenu(false);
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(target)) setShowEmojiPicker(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -527,6 +556,21 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         <div className="flex gap-0.5">
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} icon="format_quote" label="引用" />
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} icon="format_list_bulleted" label="无序列表" />
+        </div>
+
+        <div className="w-px h-4 bg-studio-border mx-0.5"></div>
+
+        {/* Emoji Group - NEW */}
+        <div ref={emojiPickerRef} className="relative">
+            <ToolbarButton 
+              size="sm" 
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
+              isActive={showEmojiPicker} 
+              icon="sentiment_satisfied" 
+              label="表情" 
+            >
+               {showEmojiPicker && <EmojiPicker onSelect={(emoji) => { editor.chain().focus().insertContent(emoji).run(); setShowEmojiPicker(false); }} />}
+            </ToolbarButton>
         </div>
 
         <div className="w-px h-4 bg-studio-border mx-0.5"></div>
