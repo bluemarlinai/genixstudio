@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useEditor } from '@tiptap/react';
+import { useEditor, EditorContent, BubbleMenu, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { Node, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -134,20 +134,109 @@ const Div = Node.create({
   renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes), 0]; },
 });
 
-const Image = Node.create({
+// --- Resizable Image Component ---
+const ImageResizeComponent = (props: any) => {
+  const { node, updateAttributes, selected } = props;
+
+  const handleResize = (direction: 'right' | 'corner') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = node.attrs.width === '100%' || !node.attrs.width 
+      ? e.currentTarget.parentElement?.offsetWidth || 300 
+      : parseInt(node.attrs.width, 10);
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const currentX = ev.clientX;
+      const diffX = currentX - startX;
+      // Simple logic: dragging right/corner increases width based on movement
+      const newWidth = Math.max(100, startWidth + diffX);
+      updateAttributes({ width: newWidth });
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  const align = node.attrs.textAlign || 'center';
+  const justifyClass = align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center';
+
+  return (
+    <NodeViewWrapper className={`image-view-wrapper flex ${justifyClass} my-6 select-none group w-full`}>
+      <div 
+        className={`relative transition-all duration-200 ease-out`}
+        style={{ width: node.attrs.width === '100%' ? '100%' : `${node.attrs.width}px`, maxWidth: '100%' }}
+      >
+        <img
+          src={node.attrs.src}
+          alt={node.attrs.alt}
+          className={`block w-full h-auto rounded-xl shadow-lg border border-studio-border/50 bg-white transition-all 
+            ${selected ? 'ring-4 ring-primary/30 ring-offset-2 cursor-default' : 'cursor-pointer hover:opacity-95'}`}
+        />
+        
+        {selected && (
+          <>
+            {/* Drag Handle - Right Edge */}
+            <div 
+               className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-12 bg-white border border-studio-border rounded-full shadow-md cursor-ew-resize flex items-center justify-center hover:bg-primary hover:border-primary transition-colors z-20 translate-x-1/2 group-hover:opacity-100"
+               onMouseDown={handleResize('right')}
+               title="调整宽度"
+            >
+               <div className="w-0.5 h-4 bg-gray-300 rounded-full"></div>
+            </div>
+
+             {/* Drag Handle - Bottom Right Corner */}
+             <div 
+               className="absolute -right-2 -bottom-2 w-6 h-6 bg-white border-2 border-primary rounded-full shadow-xl cursor-nwse-resize flex items-center justify-center z-20 hover:scale-110 transition-transform"
+               onMouseDown={handleResize('corner')}
+               title="缩放图片"
+            >
+               <span className="material-symbols-outlined text-[12px] text-primary font-black">open_in_full</span>
+            </div>
+
+            {/* Size Tooltip */}
+             <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-studio-dark text-white text-[9px] font-black px-2 py-1 rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {node.attrs.width === '100%' ? '自适应宽度' : `${Math.round(node.attrs.width)}px`}
+             </div>
+          </>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+};
+
+const ResizableImage = Node.create({
   name: 'image',
   group: 'block',
+  draggable: true,
   inline: false,
   addAttributes() {
     return {
       src: { default: null },
       alt: { default: null },
-      style: { default: null },
-      class: { default: null },
-    };
+      title: { default: null },
+      width: { default: '100%' },
+      textAlign: { default: 'center' },
+      class: { default: null }
+    }
   },
-  parseHTML() { return [{ tag: 'img' }]; },
-  renderHTML({ HTMLAttributes }) { return ['img', mergeAttributes(HTMLAttributes)]; },
+  parseHTML() {
+    return [
+      {
+        tag: 'img[src]',
+      },
+    ]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['img', mergeAttributes(HTMLAttributes)]
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageResizeComponent)
+  },
 });
 
 interface EditorProps {
@@ -218,7 +307,7 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       StarterKit, Bold, Italic, Underline, Strike, Code,
       Heading.configure({ levels: [1, 2, 3] }),
       BulletList, OrderedList, ListItem, Blockquote, HorizontalRule,
-      Div, SpanMark, Image, 
+      Div, SpanMark, ResizableImage, 
       Highlight.configure({ multicolor: true }),
       Link.configure({
         openOnClick: false,
@@ -237,6 +326,24 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
       saveToStorage(editor.getHTML());
     }
   });
+
+  // --- 关键修复：自动追加段落 (Trailing Paragraph) ---
+  // 解决当文档以组件（Div/Image）结尾时，无法在下方点击输入的问题
+  useEffect(() => {
+    if (!editor) return;
+    const ensureTrailingParagraph = () => {
+      const { doc } = editor.state;
+      const lastNode = doc.lastChild;
+      // 检查最后一个节点是否是需要跳出的 Block 类型 (Div 或 Image)
+      if (lastNode && (lastNode.type.name === 'div' || lastNode.type.name === 'image')) {
+        // 在文档末尾静默插入一个空段落
+        editor.commands.insertContentAt(doc.content.size, '<p></p>');
+      }
+    };
+    // 监听 update 事件
+    editor.on('update', ensureTrailingParagraph);
+    return () => { editor.off('update', ensureTrailingParagraph); };
+  }, [editor]);
 
   // 核心加载逻辑：组件挂载后从 IDB 读取数据
   useEffect(() => {
@@ -468,6 +575,17 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
     onPublish(currentContent, title, activeBg, activeBrand);
   };
 
+  // --- Insertion Handlers with Safety Check ---
+  const safeInsert = (content: string) => {
+     if (!editor) return;
+     // 插入内容，并强制在后面追加一个段落，确保光标能移出来
+     editor.chain()
+       .focus()
+       .insertContent(content)
+       .insertContent('<p></p>')
+       .run();
+  };
+
   const isZenMode = isLeftCollapsed && isRightCollapsed;
 
   return (
@@ -524,12 +642,17 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
           <LeftSidebar 
             activeTab={activeTab} setActiveTab={setActiveTab}
             bgPresets={bgPresets} activeBg={activeBg} setActiveBg={setActiveBg}
-            decorationPresets={decorationPresets} onInsertDecoration={(p) => editor?.chain().focus().insertContent(p.template).run()}
+            decorationPresets={decorationPresets} 
+            onInsertDecoration={(p) => safeInsert(p.template)}
             brandPresets={brandPresets} activeBrand={activeBrand} setActiveBrand={setActiveBrand}
-            snippetPresets={snippetPresets} onInsertSnippet={(s) => {
+            snippetPresets={snippetPresets} 
+            onInsertSnippet={(s) => {
               if (!editor) return;
-              if (s.type === 'HEADER') editor.chain().focus().insertContentAt(0, s.content).run();
-              else editor.chain().focus().insertContentAt(editor.state.doc.content.size, s.content).run();
+              if (s.type === 'HEADER') {
+                 editor.chain().focus().insertContentAt(0, s.content).run();
+              } else {
+                 safeInsert(s.content);
+              }
             }}
           />
         </div>

@@ -247,6 +247,7 @@ const ContainerConfigMenu: React.FC<ContainerConfigMenuProps> = ({ editor, onClo
   // Defaults
   const currentBg = styleMap['background'] || styleMap['background-color'] || '#ffffff';
   const currentPadding = styleMap['padding'] || '24px';
+  const currentRadius = styleMap['border-radius'] || '20px';
   // Parse border: "2px solid #ccc"
   const borderStr = styleMap['border'] || '2px solid #f1f5f9';
   const matchBorder = borderStr.match(/(\d+)px\s+\w+\s+(.+)/);
@@ -257,6 +258,7 @@ const ContainerConfigMenu: React.FC<ContainerConfigMenuProps> = ({ editor, onClo
     const newMap = { ...styleMap };
     
     if (updates.padding) newMap['padding'] = updates.padding;
+    if (updates.radius) newMap['border-radius'] = updates.radius;
     if (updates.bg) newMap['background'] = updates.bg;
     
     const w = updates.borderW !== undefined ? updates.borderW : currentBorderW;
@@ -299,6 +301,23 @@ const ContainerConfigMenu: React.FC<ContainerConfigMenuProps> = ({ editor, onClo
                 className={`flex-1 py-1.5 text-[9px] font-bold rounded-lg transition-all ${currentPadding === p ? 'bg-white shadow text-primary' : 'text-studio-sub hover:text-studio-dark'}`}
               >
                 {p === '12px' ? '紧凑' : p === '24px' ? '标准' : p === '32px' ? '宽敞' : '超大'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Border Radius */}
+        <div className="space-y-1.5">
+          <label className="text-[9px] font-bold text-studio-sub uppercase tracking-wider">圆角 (Radius)</label>
+          <div className="flex bg-studio-bg p-1 rounded-xl">
+            {['0px', '12px', '20px', '32px'].map(r => (
+              <button
+                key={r}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => updateStyle({ radius: r })}
+                className={`flex-1 py-1.5 text-[9px] font-bold rounded-lg transition-all ${currentRadius === r ? 'bg-white shadow text-primary' : 'text-studio-sub hover:text-studio-dark'}`}
+              >
+                {parseInt(r)}px
               </button>
             ))}
           </div>
@@ -523,10 +542,14 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   };
 
   const setTextAlign = (align: 'center' | 'right' | 'left') => {
-    if (align === 'left') {
-      updateSpanStyle({ 'display': '', 'text-align': '' });
+    if (editor.isActive('image')) {
+      editor.chain().focus().updateAttributes('image', { textAlign: align }).run();
     } else {
-      updateSpanStyle({ 'display': 'block', 'text-align': align });
+      if (align === 'left') {
+        updateSpanStyle({ 'display': '', 'text-align': '' });
+      } else {
+        updateSpanStyle({ 'display': 'block', 'text-align': align });
+      }
     }
     setShowAlignMenu(false);
   };
@@ -683,6 +706,13 @@ ${context}`;
 
   const currentSpanStyle = editor.getAttributes('span').style || '';
   const getAlignIcon = () => {
+    if (editor.isActive('image')) {
+      const align = editor.getAttributes('image').textAlign || 'center';
+      if (align === 'center') return 'format_align_center';
+      if (align === 'right') return 'format_align_right';
+      return 'format_align_left';
+    }
+
     if (currentSpanStyle.includes('text-align: center')) return 'format_align_center';
     if (currentSpanStyle.includes('text-align: right')) return 'format_align_right';
     return 'format_align_left';
@@ -699,23 +729,6 @@ ${context}`;
             <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} icon="format_underlined" label="下划线" />
             <div className="w-px h-3 bg-white/10 mx-1"></div>
             <ToolbarButton size="sm" onClick={openLinkModal} isActive={editor.isActive('link')} icon="link" label="链接" />
-            
-            {/* Bubble Menu Container Config */}
-            <div className="relative flex items-center">
-               <ToolbarButton 
-                 size="sm" 
-                 onClick={() => handleCardAction('bubble')} 
-                 isActive={editor.isActive('div') || activeConfigMenu === 'bubble'} 
-                 icon="crop_free" 
-                 label="卡片" 
-               />
-               {activeConfigMenu === 'bubble' && (
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2">
-                     <ContainerConfigMenu editor={editor} onClose={() => setActiveConfigMenu(null)} onRemove={handleRemoveContainer} />
-                  </div>
-               )}
-            </div>
-
             <div className="w-px h-3 bg-white/10 mx-1"></div>
             <ToolbarButton size="sm" onClick={() => setTextAlign('center')} isActive={currentSpanStyle.includes('text-align: center')} icon="format_align_center" label="居中" />
             <ToolbarButton size="sm" onClick={() => updateFontSize('up')} icon="format_size" label="字号+" />
@@ -809,9 +822,9 @@ ${context}`;
           >
             {showAlignMenu && (
               <div className="absolute top-full left-0 mt-2 bg-white border border-studio-border rounded-xl shadow-xl p-1 flex flex-col min-w-[44px] animate-in fade-in slide-in-from-top-1">
-                <ToolbarButton size="sm" onClick={() => setTextAlign('left')} isActive={!currentSpanStyle.includes('text-align')} icon="format_align_left" label="左对齐" />
-                <ToolbarButton size="sm" onClick={() => setTextAlign('center')} isActive={currentSpanStyle.includes('text-align: center')} icon="format_align_center" label="居中" />
-                <ToolbarButton size="sm" onClick={() => setTextAlign('right')} isActive={currentSpanStyle.includes('text-align: right')} icon="format_align_right" label="右对齐" />
+                <ToolbarButton size="sm" onClick={() => setTextAlign('left')} isActive={getAlignIcon() === 'format_align_left'} icon="format_align_left" label="左对齐" />
+                <ToolbarButton size="sm" onClick={() => setTextAlign('center')} isActive={getAlignIcon() === 'format_align_center'} icon="format_align_center" label="居中" />
+                <ToolbarButton size="sm" onClick={() => setTextAlign('right')} isActive={getAlignIcon() === 'format_align_right'} icon="format_align_right" label="右对齐" />
               </div>
             )}
           </ToolbarButton>

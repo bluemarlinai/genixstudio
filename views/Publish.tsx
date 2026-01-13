@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { BackgroundPreset, BrandPreset } from '../components/editor/EditorTypes';
+import { processHtmlForWechat, processHtmlForToutiao } from '../utils/PlatformRenderers';
 
 interface PublishProps {
   content: string;
@@ -59,65 +60,13 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
     }, 2000);
   };
 
-  const remToPx = (styleStr: string) => {
-    if (!styleStr) return '';
-    return styleStr.replace(/([\d.]+)rem/g, (_, p1) => `${parseFloat(p1) * 16}px`);
-  };
-
-  const processHtmlForWechat = (rawHtml: string) => {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(rawHtml, 'text/html');
-
-    const styleMap: Record<string, string> = {
-      'h1': 'font-size: 24px; font-weight: bold; color: #1e293b; margin: 25px 0 15px; line-height: 1.4; padding: 0;',
-      'h2': 'font-size: 20px; font-weight: bold; color: #1e293b; margin: 22px 0 12px; line-height: 1.4; border-bottom: 2px solid #f1f5f9; padding: 0 0 8px 0;',
-      'h3': 'font-size: 18px; font-weight: bold; color: #334155; margin: 18px 0 10px; line-height: 1.4; padding: 0;',
-      'p': 'font-size: 16px; line-height: 1.75; color: #333333; margin: 16px 0; text-align: justify; padding: 0;',
-      'blockquote': 'border-left: 4px solid #137fec; padding: 12px 18px; background-color: #f8fafc; color: #666666; margin: 18px 0; border-radius: 8px;',
-      'strong': 'color: #1e293b; font-weight: bold !important;',
-      'ul': 'list-style-type: disc; margin: 15px 0; padding-left: 25px;',
-      'li': 'margin-bottom: 8px; font-size: 16px; color: #333333;',
-      'pre': 'background-color: #1e293b; border-radius: 12px; padding: 16px; margin: 20px 0; overflow-x: auto; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; line-height: 1.6; tab-size: 4;',
-      'code': 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; background-color: rgba(30, 41, 59, 0.05); color: #475569; padding: 2px 4px; border-radius: 4px;'
-    };
-
-    const bgStyleObj = bg?.style || {};
-    let bgStyleStr = '';
-    if (bgStyleObj.background) bgStyleStr += `background: ${bgStyleObj.background};`;
-    if (bgStyleObj.backgroundImage) bgStyleStr += `background-image: ${bgStyleObj.backgroundImage.replace(/"/g, "'")};`;
-    if (bgStyleObj.backgroundColor) bgStyleStr += `background-color: ${bgStyleObj.backgroundColor};`;
-    if (bgStyleObj.backgroundSize) bgStyleStr += `background-size: ${bgStyleObj.backgroundSize};`;
-
-    const preNodes = doc.querySelectorAll('pre');
-    preNodes.forEach(pre => {
-      const code = pre.querySelector('code');
-      const codeText = code ? code.innerHTML : pre.innerHTML;
-      const section = doc.createElement('section');
-      section.setAttribute('style', styleMap['pre'] + ' display: block; white-space: pre-wrap; word-break: break-all;');
-      section.innerHTML = `<code>${codeText}</code>`;
-      const innerCode = section.querySelector('code');
-      if (innerCode) {
-        innerCode.setAttribute('style', 'background: none !important; color: inherit !important; border: none !important; padding: 0 !important; font-family: inherit !important;');
-      }
-      pre.parentNode?.replaceChild(section, pre);
-    });
-
-    const allElements = doc.body.querySelectorAll('*');
-    allElements.forEach(el => {
-      const tagName = el.tagName.toLowerCase();
-      if (el.tagName === 'SECTION' && el.getAttribute('style')?.includes('#1e293b')) return;
-      const baseStyle = styleMap[tagName] || '';
-      let existingStyle = remToPx(el.getAttribute('style') || '');
-      el.setAttribute('style', `box-sizing: border-box !important; max-width: 100% !important; ${baseStyle}; ${existingStyle}`.trim());
-      el.removeAttribute('class');
-    });
-
-    return `<section style="margin: 0; padding: 20px 15px; box-sizing: border-box; ${bgStyleStr}">${doc.body.innerHTML}</section>`;
-  };
-
   const handleCopy = async (platform: 'WECHAT' | 'TOUTIAO') => {
     try {
-      const processedHtml = platform === 'WECHAT' ? processHtmlForWechat(content) : content;
+      // 使用提取出的公共逻辑进行渲染
+      const processedHtml = platform === 'WECHAT' 
+        ? processHtmlForWechat(content, bg) 
+        : processHtmlForToutiao(content);
+        
       const htmlBlob = new Blob([processedHtml], { type: 'text/html' });
       const textBlob = new Blob([title + '\n\n' + content.replace(/<[^>]*>/g, '')], { type: 'text/plain' });
       const data = [new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })];
@@ -125,6 +74,7 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
       setCopyStatus(platform === 'WECHAT' ? 'WECHAT_COPIED' : 'TOUTIAO_COPIED');
       setTimeout(() => setCopyStatus('IDLE'), 3000);
     } catch (err) {
+      console.error(err);
       setCopyStatus('ERROR');
     }
   };
@@ -172,7 +122,7 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
             }}
           >
             <div className="h-full flex flex-col relative bg-white">
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto scrollbar-hide">
                 <ArticlePreviewContent mode={device} content={content} title={title} bg={bg} />
               </div>
             </div>
@@ -206,7 +156,7 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${copyStatus === 'WECHAT_COPIED' ? 'bg-green-500 text-white' : 'bg-studio-bg text-studio-sub group-hover:text-primary'}`}><span className="material-symbols-outlined text-[18px]">{copyStatus === 'WECHAT_COPIED' ? 'check_circle' : 'chat'}</span></div>
                   <div className="text-left">
                     <span className={`text-xs font-black block ${copyStatus === 'WECHAT_COPIED' ? 'text-green-700' : 'text-studio-dark group-hover:text-primary'}`}>拷贝微信富文本</span>
-                    <p className="text-[8px] text-studio-sub font-bold uppercase tracking-tighter">全方位还原底纹与边框</p>
+                    <p className="text-[8px] text-studio-sub font-bold uppercase tracking-tighter">卡片/背景/边框 100% 还原</p>
                   </div>
                 </div>
               </button>
@@ -239,18 +189,19 @@ const Publish: React.FC<PublishProps> = ({ content, title, bg, brand, onBack, on
 
 const ArticlePreviewContent: React.FC<{ mode: 'mobile' | 'pc', content: string, title: string, bg: BackgroundPreset | null }> = ({ mode, content, title, bg }) => {
   const isMobile = mode === 'mobile';
+  
+  // 使用新的渲染逻辑生成预览 HTML，确保所见即所得
+  const previewHtml = processHtmlForWechat(content, bg);
+
   return (
-    <div 
-      className={`min-h-full ${isMobile ? 'pb-20' : ''} ${bg?.class || ''}`} 
-      style={{ ...bg?.style, backgroundRepeat: 'repeat' }}
-    >
+    <div className={`min-h-full ${isMobile ? 'pb-20' : ''}`}>
       <div className={`${isMobile ? 'px-5 pt-6' : 'p-12'}`}>
-        <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2 py-1 rounded-md">渲染预览</span>
+        <span className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/5 px-2 py-1 rounded-md">渲染预览 (WeChat)</span>
         <h1 className={`${isMobile ? 'text-2xl' : 'text-5xl'} font-black text-studio-dark mt-4 leading-tight`}>{title || '未命名文章'}</h1>
       </div>
+      {/* 直接渲染处理后的 HTML，不使用 prose，因为样式已经内联 */}
       <div 
-        className={`prose ${isMobile ? 'prose-sm px-5' : 'prose-lg px-12'} prose-blue max-w-none py-6`} 
-        dangerouslySetInnerHTML={{ __html: content }} 
+        dangerouslySetInnerHTML={{ __html: previewHtml }} 
       />
     </div>
   );
