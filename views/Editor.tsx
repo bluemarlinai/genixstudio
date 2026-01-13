@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useEditor, EditorContent, BubbleMenu, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { Node, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -17,6 +17,8 @@ import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import ListItem from '@tiptap/extension-list-item';
 import Highlight from '@tiptap/extension-highlight';
 import Link from '@tiptap/extension-link';
+import TextStyle from '@tiptap/extension-text-style';
+import FontFamily from '@tiptap/extension-font-family';
 
 import { BackgroundPreset, BrandPreset, SidebarTab } from '../components/editor/EditorTypes';
 import { bgPresets, decorationPresets, brandPresets, snippetPresets } from '../components/editor/EditorData';
@@ -315,6 +317,8 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
           class: 'text-primary underline cursor-pointer',
         },
       }),
+      TextStyle,
+      FontFamily,
       Placeholder.configure({ placeholder: '在此处落笔您的灵感，或者点击“AI一键创作”快速生成内容...' })
     ],
     content: '', // 初始为空，等待 IndexedDB 加载

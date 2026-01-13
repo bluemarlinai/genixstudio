@@ -1,7 +1,20 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { EditorContent, BubbleMenu } from '@tiptap/react';
+import { EditorContent } from '@tiptap/react';
 import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
+import TextStyle from '@tiptap/extension-text-style';
+import FontFamily from '@tiptap/extension-font-family';
+import Code from '@tiptap/extension-code';
+import Bold from '@tiptap/extension-bold';
+import Italic from '@tiptap/extension-italic';
+import Heading from '@tiptap/extension-heading';
+import Paragraph from '@tiptap/extension-paragraph';
+import Blockquote from '@tiptap/extension-blockquote';
+import BulletList from '@tiptap/extension-bullet-list';
+import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import { BackgroundPreset, BrandPreset } from './EditorTypes';
 
 interface HeadingItem {
@@ -98,6 +111,34 @@ const TableOfContents: React.FC<{ editor: Editor | null }> = ({ editor }) => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+const FontFamilyPicker = ({ onSelect }: { onSelect: (font: string) => void }) => {
+  const fonts = [
+    { name: '默认字体', value: '' },
+    { name: '黑体 (Sans)', value: '"PingFang SC", "Microsoft YaHei", "SimHei", sans-serif' },
+    { name: '宋体 (Serif)', value: '"SimSun", "STSong", "Songti SC", serif' },
+    { name: '楷体 (Kai)', value: '"KaiTi", "STKaiti", "KaiTi_GB2312", serif' },
+    { name: '仿宋 (FangSong)', value: '"FangSong", "STFangsong", serif' },
+    { name: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+    { name: 'Georgia', value: 'Georgia, serif' },
+  ];
+
+  return (
+    <div className="absolute top-full left-0 mt-2 bg-white border border-studio-border rounded-xl shadow-xl p-1 flex flex-col min-w-[120px] animate-in fade-in zoom-in-95 duration-200 z-[100]">
+      {fonts.map(font => (
+        <button
+          key={font.name}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onSelect(font.value)}
+          className="px-3 py-2 text-[10px] font-bold text-left rounded-lg hover:bg-studio-bg text-studio-dark transition-colors"
+          style={{ fontFamily: font.value || 'inherit' }}
+        >
+          {font.name}
+        </button>
+      ))}
     </div>
   );
 };
@@ -392,6 +433,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showHeadingMenu, setShowHeadingMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showFontMenu, setShowFontMenu] = useState(false);
   
   // New state: track WHICH menu is active ('toolbar' or 'bubble')
   const [activeConfigMenu, setActiveConfigMenu] = useState<'toolbar' | 'bubble' | null>(null);
@@ -414,6 +456,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const headingMenuRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const containerConfigRef = useRef<HTMLDivElement>(null);
+  const fontMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -424,6 +467,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       if (sizeMenuRef.current && !sizeMenuRef.current.contains(target)) setShowSizeMenu(false);
       if (headingMenuRef.current && !headingMenuRef.current.contains(target)) setShowHeadingMenu(false);
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(target)) setShowEmojiPicker(false);
+      if (fontMenuRef.current && !fontMenuRef.current.contains(target)) setShowFontMenu(false);
       
       // Handle config menu outside click
       if (containerConfigRef.current && !containerConfigRef.current.contains(target)) {
@@ -562,6 +606,15 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     if (match) currentSize = parseInt(match[1]);
     const newSize = direction === 'up' ? currentSize + 2 : Math.max(10, currentSize - 2);
     updateSpanStyle({ 'font-size': `${newSize}px` });
+  };
+
+  const setFontFamily = (font: string) => {
+    if (font) {
+      editor.chain().focus().setFontFamily(font).run();
+    } else {
+      editor.chain().focus().unsetFontFamily().run();
+    }
+    setShowFontMenu(false);
   };
 
   // Improved container handler that knows source
@@ -721,30 +774,6 @@ ${context}`;
   return (
     <section ref={scrollContainerRef} className="flex-1 overflow-y-auto bg-studio-bg/60 flex flex-col items-center scroll-smooth pb-32 relative transition-all duration-500">
       
-      {editor && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
-          <div className="bubble-menu flex items-center gap-0.5 bg-studio-dark/95 backdrop-blur-md px-1.5 py-1 rounded-2xl shadow-2xl border border-white/10">
-            <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} icon="format_bold" label="加粗" />
-            <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} icon="format_italic" label="斜体" />
-            <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} icon="format_underlined" label="下划线" />
-            <div className="w-px h-3 bg-white/10 mx-1"></div>
-            <ToolbarButton size="sm" onClick={openLinkModal} isActive={editor.isActive('link')} icon="link" label="链接" />
-            <div className="w-px h-3 bg-white/10 mx-1"></div>
-            <ToolbarButton size="sm" onClick={() => setTextAlign('center')} isActive={currentSpanStyle.includes('text-align: center')} icon="format_align_center" label="居中" />
-            <ToolbarButton size="sm" onClick={() => updateFontSize('up')} icon="format_size" label="字号+" />
-            <div className="w-px h-3 bg-white/10 mx-1"></div>
-            <div ref={textColorPickerRef} className="relative">
-              <ToolbarButton size="sm" onClick={() => setShowTextColorPicker(!showTextColorPicker)} isActive={showTextColorPicker} icon="format_color_text" label="颜色">
-                {showTextColorPicker && <TextColorPicker onSelect={applyTextColor} />}
-              </ToolbarButton>
-            </div>
-            <div className="w-px h-3 bg-white/10 mx-1"></div>
-            <ToolbarButton size="sm" onClick={handleAiPolish} loading={activeAiTask === 'POLISH'} icon="auto_fix_high" label="AI 润色" />
-            <ToolbarButton size="sm" onClick={handleAiContinuation} loading={activeAiTask === 'CONTINUE'} icon="edit_note" label="续写" />
-          </div>
-        </BubbleMenu>
-      )}
-
       {/* 1. COMPACT STICKY TOOLBAR */}
       <div className="sticky top-4 flex items-center gap-1 bg-white/90 backdrop-blur-xl border border-studio-border rounded-[24px] p-1.5 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.1)] z-50 ring-1 ring-black/5 animate-in slide-in-from-top-4 duration-500">
         
@@ -808,6 +837,19 @@ ${context}`;
                 </button>
               </div>
             )}
+          </ToolbarButton>
+        </div>
+
+        {/* Font Family Dropdown - NEW */}
+        <div ref={fontMenuRef} className="relative">
+          <ToolbarButton 
+            size="sm" 
+            onClick={() => setShowFontMenu(!showFontMenu)} 
+            isActive={showFontMenu} 
+            icon="font_download" 
+            label="字体" 
+          >
+            {showFontMenu && <FontFamilyPicker onSelect={setFontFamily} />}
           </ToolbarButton>
         </div>
 
