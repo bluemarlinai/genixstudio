@@ -220,6 +220,146 @@ const EmojiPicker = ({ onSelect }: { onSelect: (emoji: string) => void }) => {
   );
 };
 
+const parseStyle = (styleStr: string) => {
+  const res: Record<string, string> = {};
+  if (!styleStr) return res;
+  styleStr.split(';').forEach(part => {
+    const colonIndex = part.indexOf(':');
+    if (colonIndex !== -1) {
+      const key = part.slice(0, colonIndex).trim();
+      const val = part.slice(colonIndex + 1).trim();
+      if (key && val) res[key] = val;
+    }
+  });
+  return res;
+};
+
+interface ContainerConfigMenuProps {
+  editor: Editor;
+  onClose: () => void;
+  onRemove: () => void;
+}
+
+const ContainerConfigMenu: React.FC<ContainerConfigMenuProps> = ({ editor, onClose, onRemove }) => {
+  const attrs = editor.getAttributes('div');
+  const styleMap = parseStyle(attrs.style || '');
+  
+  // Defaults
+  const currentBg = styleMap['background'] || styleMap['background-color'] || '#ffffff';
+  const currentPadding = styleMap['padding'] || '24px';
+  // Parse border: "2px solid #ccc"
+  const borderStr = styleMap['border'] || '2px solid #f1f5f9';
+  const matchBorder = borderStr.match(/(\d+)px\s+\w+\s+(.+)/);
+  const currentBorderW = matchBorder ? matchBorder[1] : (borderStr === 'none' ? '0' : '2');
+  const currentBorderC = matchBorder ? matchBorder[2] : '#f1f5f9';
+
+  const updateStyle = (updates: any) => {
+    const newMap = { ...styleMap };
+    
+    if (updates.padding) newMap['padding'] = updates.padding;
+    if (updates.bg) newMap['background'] = updates.bg;
+    
+    const w = updates.borderW !== undefined ? updates.borderW : currentBorderW;
+    const c = updates.borderC !== undefined ? updates.borderC : currentBorderC;
+    
+    if (parseInt(w) === 0) {
+      newMap['border'] = 'none';
+    } else {
+      newMap['border'] = `${w}px solid ${c}`;
+    }
+
+    const styleString = Object.entries(newMap).map(([k,v]) => `${k}: ${v}`).join('; ');
+    editor.chain().focus().updateAttributes('div', { style: styleString }).run();
+  };
+
+  return (
+    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 p-5 bg-white border border-studio-border rounded-2xl shadow-2xl z-[120] w-72 animate-in fade-in slide-in-from-top-2 duration-200">
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-studio-border">
+        <h3 className="text-[10px] font-black text-studio-dark uppercase tracking-widest">卡片样式配置</h3>
+        <div className="flex gap-1">
+          <button onClick={onRemove} className="p-1 hover:bg-red-50 rounded-md text-gray-400 hover:text-red-500 transition-colors" title="移除卡片">
+            <span className="material-symbols-outlined text-[16px]">delete</span>
+          </button>
+          <button onClick={onClose} className="p-1 hover:bg-studio-bg rounded-md text-gray-400 hover:text-studio-dark transition-colors">
+            <span className="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {/* Padding */}
+        <div className="space-y-1.5">
+          <label className="text-[9px] font-bold text-studio-sub uppercase tracking-wider">内边距 (Padding)</label>
+          <div className="flex bg-studio-bg p-1 rounded-xl">
+            {['12px', '24px', '32px', '40px'].map(p => (
+              <button
+                key={p}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => updateStyle({ padding: p })}
+                className={`flex-1 py-1.5 text-[9px] font-bold rounded-lg transition-all ${currentPadding === p ? 'bg-white shadow text-primary' : 'text-studio-sub hover:text-studio-dark'}`}
+              >
+                {p === '12px' ? '紧凑' : p === '24px' ? '标准' : p === '32px' ? '宽敞' : '超大'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Border Width */}
+        <div className="space-y-1.5">
+          <label className="text-[9px] font-bold text-studio-sub uppercase tracking-wider">边框粗细</label>
+          <div className="flex bg-studio-bg p-1 rounded-xl">
+            {['0', '1', '2', '4'].map(w => (
+              <button
+                key={w}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => updateStyle({ borderW: w })}
+                className={`flex-1 py-1.5 text-[9px] font-bold rounded-lg transition-all ${currentBorderW === w ? 'bg-white shadow text-primary' : 'text-studio-sub hover:text-studio-dark'}`}
+              >
+                {w}px
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Background Color */}
+        <div className="space-y-1.5">
+          <label className="text-[9px] font-bold text-studio-sub uppercase tracking-wider">背景填充</label>
+          <div className="grid grid-cols-7 gap-2">
+            {['#ffffff', '#f8fafc', '#f1f5f9', '#ecfdf5', '#eff6ff', '#fef2f2', 'transparent'].map(c => (
+              <button
+                key={c}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => updateStyle({ bg: c })}
+                className={`w-7 h-7 rounded-full border transition-transform hover:scale-110 relative ${currentBg === c ? 'ring-2 ring-primary ring-offset-2 border-transparent' : 'border-gray-200'}`}
+                style={{ backgroundColor: c }}
+                title={c}
+              >
+                 {c === 'transparent' && <span className="absolute inset-0 flex items-center justify-center text-gray-400 material-symbols-outlined text-[14px]">block</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+         {/* Border Color */}
+         <div className="space-y-1.5">
+          <label className="text-[9px] font-bold text-studio-sub uppercase tracking-wider">边框颜色</label>
+          <div className="grid grid-cols-7 gap-2">
+            {['#e2e8f0', '#94a3b8', '#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#6366f1'].map(c => (
+              <button
+                key={c}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => updateStyle({ borderC: c })}
+                className={`w-7 h-7 rounded-full border transition-transform hover:scale-110 ${currentBorderC === c ? 'ring-2 ring-primary ring-offset-2 border-transparent' : 'border-gray-200'}`}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   editor,
   activeBg,
@@ -233,6 +373,9 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showHeadingMenu, setShowHeadingMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
+  // New state: track WHICH menu is active ('toolbar' or 'bubble')
+  const [activeConfigMenu, setActiveConfigMenu] = useState<'toolbar' | 'bubble' | null>(null);
   
   // AI Task States
   const [activeAiTask, setActiveAiTask] = useState<'IDLE' | 'POLISH' | 'CONTINUE' | 'LAYOUT'>('IDLE');
@@ -251,6 +394,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const sizeMenuRef = useRef<HTMLDivElement>(null);
   const headingMenuRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const containerConfigRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -261,6 +405,13 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       if (sizeMenuRef.current && !sizeMenuRef.current.contains(target)) setShowSizeMenu(false);
       if (headingMenuRef.current && !headingMenuRef.current.contains(target)) setShowHeadingMenu(false);
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(target)) setShowEmojiPicker(false);
+      
+      // Handle config menu outside click
+      if (containerConfigRef.current && !containerConfigRef.current.contains(target)) {
+        // We only close if it was a click completely outside. 
+        // Note: The click might be on the other button, but that's handled by its own onClick
+        setActiveConfigMenu(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -390,6 +541,36 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     updateSpanStyle({ 'font-size': `${newSize}px` });
   };
 
+  // Improved container handler that knows source
+  const handleCardAction = (source: 'toolbar' | 'bubble') => {
+    if (!editor) return;
+    
+    if (editor.isActive('div')) {
+      // Already inside a container
+      if (activeConfigMenu === source) {
+        // If clicking the same button that opened it, toggle off
+        setActiveConfigMenu(null);
+      } else {
+        // Open the menu for this source
+        setActiveConfigMenu(source);
+      }
+    } else {
+      // Not in container, create one and open menu
+      editor.chain().focus().wrapIn('div', {
+        style: 'border: 2px solid #f1f5f9; border-radius: 20px; padding: 24px; background: #ffffff; margin: 24px 0; box-shadow: 0 8px 24px -6px rgba(0,0,0,0.05);',
+        class: 'bg-white rounded-2xl border border-studio-border p-6 my-6'
+      }).run();
+      setActiveConfigMenu(source);
+    }
+  };
+  
+  const handleRemoveContainer = () => {
+    if (editor) {
+      editor.chain().focus().lift('div').run();
+      setActiveConfigMenu(null);
+    }
+  }
+
   // --- Styled Modal Link Logic ---
   const openLinkModal = () => {
     const previousUrl = editor.getAttributes('link').href || '';
@@ -451,7 +632,6 @@ ${textToPolish}`;
   const handleAiContinuation = async () => {
     if (!editor) return;
     const { from } = editor.state.selection;
-    // 获取光标前的上下文 (最多 2000 字)
     const contextSize = 2000;
     const start = Math.max(0, from - contextSize);
     const context = editor.state.doc.textBetween(start, from, '\n');
@@ -519,6 +699,23 @@ ${context}`;
             <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} icon="format_underlined" label="下划线" />
             <div className="w-px h-3 bg-white/10 mx-1"></div>
             <ToolbarButton size="sm" onClick={openLinkModal} isActive={editor.isActive('link')} icon="link" label="链接" />
+            
+            {/* Bubble Menu Container Config */}
+            <div className="relative flex items-center">
+               <ToolbarButton 
+                 size="sm" 
+                 onClick={() => handleCardAction('bubble')} 
+                 isActive={editor.isActive('div') || activeConfigMenu === 'bubble'} 
+                 icon="crop_free" 
+                 label="卡片" 
+               />
+               {activeConfigMenu === 'bubble' && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2">
+                     <ContainerConfigMenu editor={editor} onClose={() => setActiveConfigMenu(null)} onRemove={handleRemoveContainer} />
+                  </div>
+               )}
+            </div>
+
             <div className="w-px h-3 bg-white/10 mx-1"></div>
             <ToolbarButton size="sm" onClick={() => setTextAlign('center')} isActive={currentSpanStyle.includes('text-align: center')} icon="format_align_center" label="居中" />
             <ToolbarButton size="sm" onClick={() => updateFontSize('up')} icon="format_size" label="字号+" />
@@ -659,6 +856,22 @@ ${context}`;
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} icon="format_quote" label="引用" />
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} icon="format_list_bulleted" label="无序列表" />
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().setHorizontalRule().run()} icon="horizontal_rule" label="分割线" />
+          
+          {/* Toolbar Container Config - Refactored */}
+          <div ref={containerConfigRef} className="relative">
+             <ToolbarButton 
+               size="sm" 
+               onClick={() => handleCardAction('toolbar')} 
+               isActive={editor.isActive('div') || activeConfigMenu === 'toolbar'} 
+               icon="crop_free" 
+               label="卡片容器" 
+             />
+             {activeConfigMenu === 'toolbar' && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2">
+                  <ContainerConfigMenu editor={editor} onClose={() => setActiveConfigMenu(null)} onRemove={handleRemoveContainer} />
+                </div>
+             )}
+          </div>
         </div>
 
         <div className="w-px h-4 bg-studio-border mx-0.5"></div>
