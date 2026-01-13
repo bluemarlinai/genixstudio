@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Bold from '@tiptap/extension-bold';
 import Italic from '@tiptap/extension-italic';
+import Underline from '@tiptap/extension-underline';
 import Strike from '@tiptap/extension-strike';
 import Code from '@tiptap/extension-code';
 import Heading from '@tiptap/extension-heading';
@@ -14,6 +15,8 @@ import OrderedList from '@tiptap/extension-ordered-list';
 import Blockquote from '@tiptap/extension-blockquote';
 import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import ListItem from '@tiptap/extension-list-item';
+import Highlight from '@tiptap/extension-highlight';
+import Link from '@tiptap/extension-link';
 
 import { BackgroundPreset, BrandPreset, SidebarTab } from '../components/editor/EditorTypes';
 import { bgPresets, decorationPresets, brandPresets, snippetPresets } from '../components/editor/EditorData';
@@ -212,10 +215,17 @@ const EditorView: React.FC<EditorProps> = ({ onBack, onPublish, autoOpenAiModal 
 
   const editor = useEditor({
     extensions: [
-      StarterKit, Bold, Italic, Strike, Code,
+      StarterKit, Bold, Italic, Underline, Strike, Code,
       Heading.configure({ levels: [1, 2, 3] }),
       BulletList, OrderedList, ListItem, Blockquote, HorizontalRule,
       Div, SpanMark, Image, 
+      Highlight.configure({ multicolor: true }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-primary underline cursor-pointer',
+        },
+      }),
       Placeholder.configure({ placeholder: '在此处落笔您的灵感，或者点击“AI一键创作”快速生成内容...' })
     ],
     content: '', // 初始为空，等待 IndexedDB 加载

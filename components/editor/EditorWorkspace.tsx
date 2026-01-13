@@ -233,9 +233,17 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const [showSizeMenu, setShowSizeMenu] = useState(false);
   const [showHeadingMenu, setShowHeadingMenu] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  
+  // AI Task States
+  const [activeAiTask, setActiveAiTask] = useState<'IDLE' | 'POLISH' | 'CONTINUE' | 'LAYOUT'>('IDLE');
+  const isAiProcessing = activeAiTask !== 'IDLE';
+
   const [showToc, setShowToc] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  
+  // Link Modal States
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
   
   const colorPickerRef = useRef<HTMLDivElement>(null);
   const textColorPickerRef = useRef<HTMLDivElement>(null);
@@ -284,7 +292,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     onClick?: (e: React.MouseEvent) => void, 
     isActive?: boolean, 
     icon?: string, 
-    label?: string,
+    label?: string, 
     isText?: boolean,
     children?: React.ReactNode,
     size?: 'sm' | 'md',
@@ -382,27 +390,115 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     updateSpanStyle({ 'font-size': `${newSize}px` });
   };
 
+  // --- Styled Modal Link Logic ---
+  const openLinkModal = () => {
+    const previousUrl = editor.getAttributes('link').href || '';
+    setLinkUrl(previousUrl);
+    setShowLinkModal(true);
+  };
+
+  const handleSaveLink = () => {
+    if (linkUrl === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    } else {
+      editor.chain().focus().extendMarkRange('link').setLink({ href: linkUrl }).run();
+    }
+    setShowLinkModal(false);
+  };
+
+  const handleRemoveLink = () => {
+    editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    setShowLinkModal(false);
+  };
+
   const handleAiPolish = async () => {
-    const { from, to } = editor.state.selection;
-    const text = editor.state.doc.textBetween(from, to, ' ') || editor.getText();
-    if (!text.trim()) return;
-    setIsAiProcessing(true);
+    const { from, to, empty } = editor.state.selection;
+    let textToPolish = "";
+    let range = { from, to };
+
+    if (empty) {
+      textToPolish = editor.getText();
+      range = { from: 0, to: editor.state.doc.content.size };
+      if (!textToPolish.trim()) return;
+    } else {
+      textToPolish = editor.state.doc.textBetween(from, to, ' ');
+    }
+    if (!textToPolish.trim()) return;
+
+    setActiveAiTask('POLISH');
     try {
-      const prompt = `你是一位顶尖的新媒体编辑，请对以下内容进行深度润色：\n\n${text}`;
+      const prompt = `你是一位资深编辑。请对用户提供的以下文本进行润色。
+目标：提升专业度、流畅度，修正语病，并使其更具吸引力。
+注意：保持原文的核心观点和信息，不要大幅删减，直接返回润色后的结果。
+文本：
+${textToPolish}`;
       const result = await callAI(prompt);
-      if (result) editor.chain().focus().insertContentAt({ from, to }, result).run();
-    } finally { setIsAiProcessing(false); }
+      if (result) {
+        if (empty) {
+          editor.commands.setContent(result);
+        } else {
+          editor.chain().focus().insertContentAt(range, result).run();
+        }
+      }
+    } catch(e) {
+      console.error(e);
+      alert('AI 润色失败，请重试');
+    } finally { 
+      setActiveAiTask('IDLE'); 
+    }
+  };
+
+  const handleAiContinuation = async () => {
+    if (!editor) return;
+    const { from } = editor.state.selection;
+    // 获取光标前的上下文 (最多 2000 字)
+    const contextSize = 2000;
+    const start = Math.max(0, from - contextSize);
+    const context = editor.state.doc.textBetween(start, from, '\n');
+    
+    if (context.length < 5) {
+      alert('请先输入一些内容，以便 AI 理解上下文。');
+      return;
+    }
+
+    setActiveAiTask('CONTINUE');
+    try {
+      const prompt = `你是一位专业作家。请基于以下提供的上文内容，续写一段文字。
+要求：
+1. 延续上文的风格、语调和逻辑。
+2. 内容充实，推动文章发展。
+3. 字数控制在 150-300 字左右。
+4. 如果上文是未完成的句子，请先补全。
+5. 直接输出续写内容，不要包含"这是续写"等前缀。
+上文参考：
+${context}`;
+      
+      const result = await callAI(prompt);
+      if (result) {
+         editor.chain().focus().insertContent(result).run();
+      }
+    } catch (e) {
+      console.error(e);
+      alert('AI 续写失败，请重试');
+    } finally {
+      setActiveAiTask('IDLE');
+    }
   };
 
   const handleAutoLayout = async () => {
     const content = editor.getHTML();
     if (!editor.getText().trim()) return;
-    setIsAiProcessing(true);
+    setActiveAiTask('LAYOUT');
     try {
-      const prompt = `你是一位顶级视觉排版大师，请将以下 HTML 重新排版：\n${content}`;
+      const prompt = `你是一位顶级视觉排版大师，请将以下 HTML 重新排版，优化视觉层次和阅读体验，但不要改变原有内容：\n${content}`;
       const result = await callAI(prompt);
       if (result) editor.commands.setContent(result);
-    } finally { setIsAiProcessing(false); }
+    } catch(e) {
+      console.error(e);
+      alert('一键排版失败');
+    } finally { 
+      setActiveAiTask('IDLE'); 
+    }
   };
 
   const currentSpanStyle = editor.getAttributes('span').style || '';
@@ -420,6 +516,9 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           <div className="bubble-menu flex items-center gap-0.5 bg-studio-dark/95 backdrop-blur-md px-1.5 py-1 rounded-2xl shadow-2xl border border-white/10">
             <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} icon="format_bold" label="加粗" />
             <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} icon="format_italic" label="斜体" />
+            <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} icon="format_underlined" label="下划线" />
+            <div className="w-px h-3 bg-white/10 mx-1"></div>
+            <ToolbarButton size="sm" onClick={openLinkModal} isActive={editor.isActive('link')} icon="link" label="链接" />
             <div className="w-px h-3 bg-white/10 mx-1"></div>
             <ToolbarButton size="sm" onClick={() => setTextAlign('center')} isActive={currentSpanStyle.includes('text-align: center')} icon="format_align_center" label="居中" />
             <ToolbarButton size="sm" onClick={() => updateFontSize('up')} icon="format_size" label="字号+" />
@@ -430,7 +529,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
               </ToolbarButton>
             </div>
             <div className="w-px h-3 bg-white/10 mx-1"></div>
-            <ToolbarButton size="sm" onClick={handleAiPolish} loading={isAiProcessing} icon="auto_fix_high" label="AI 润色" />
+            <ToolbarButton size="sm" onClick={handleAiPolish} loading={activeAiTask === 'POLISH'} icon="auto_fix_high" label="AI 润色" />
+            <ToolbarButton size="sm" onClick={handleAiContinuation} loading={activeAiTask === 'CONTINUE'} icon="edit_note" label="续写" />
           </div>
         </BubbleMenu>
       )}
@@ -450,7 +550,9 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         <div className="flex gap-0.5">
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} icon="format_bold" label="加粗" />
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} icon="format_italic" label="斜体" />
+          <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} icon="format_underlined" label="下划线" />
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive('code')} icon="code" label="代码" />
+          <ToolbarButton size="sm" onClick={openLinkModal} isActive={editor.isActive('link')} icon="link" label="链接" />
         </div>
 
         {/* Heading Dropdown (Refactored) */}
@@ -556,6 +658,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         <div className="flex gap-0.5">
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} icon="format_quote" label="引用" />
           <ToolbarButton size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} icon="format_list_bulleted" label="无序列表" />
+          <ToolbarButton size="sm" onClick={() => editor.chain().focus().setHorizontalRule().run()} icon="horizontal_rule" label="分割线" />
         </div>
 
         <div className="w-px h-4 bg-studio-border mx-0.5"></div>
@@ -583,10 +686,21 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
             disabled={isAiProcessing}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-studio-dark text-white rounded-xl text-[9px] font-black hover:bg-black transition-all uppercase tracking-wider shadow-lg shadow-black/5 disabled:opacity-50"
           >
-            {isAiProcessing ? <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div> : <span className="material-symbols-outlined text-[14px] text-primary">bolt</span>}
+            {activeAiTask === 'POLISH' ? <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div> : <span className="material-symbols-outlined text-[14px] text-primary">auto_fix_high</span>}
             润色
           </button>
-          <ToolbarButton size="sm" onClick={handleAutoLayout} loading={isAiProcessing} icon="auto_awesome_motion" label="一键排版" />
+          
+          <button 
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleAiContinuation}
+            disabled={isAiProcessing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-[9px] font-black hover:bg-indigo-700 transition-all uppercase tracking-wider shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+          >
+             {activeAiTask === 'CONTINUE' ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="material-symbols-outlined text-[14px] text-white">edit_note</span>}
+            续写
+          </button>
+
+          <ToolbarButton size="sm" onClick={handleAutoLayout} loading={activeAiTask === 'LAYOUT'} icon="auto_awesome_motion" label="一键排版" />
         </div>
 
         <div className="w-px h-4 bg-studio-border mx-0.5"></div>
@@ -631,6 +745,58 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
           <span className="material-symbols-outlined text-[28px] font-black group-hover:animate-bounce-slow">arrow_upward</span>
         </button>
       </div>
+
+      {/* Styled Link Modal */}
+      {showLinkModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity" onClick={() => setShowLinkModal(false)} />
+          <div className="bg-white p-6 rounded-[28px] shadow-2xl relative z-10 w-full max-w-[360px] border border-studio-border animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-2 mb-4 text-studio-dark">
+              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-[18px]">link</span>
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-widest">插入链接</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="relative">
+                <input 
+                  type="text"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full bg-studio-bg border-none rounded-xl px-4 py-3 text-xs font-medium focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-gray-400"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveLink(); }}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                {editor.isActive('link') && (
+                  <button 
+                    onClick={handleRemoveLink}
+                    className="flex-1 py-2.5 rounded-xl border border-red-100 text-red-500 text-[10px] font-black hover:bg-red-50 transition-all"
+                  >
+                    移除链接
+                  </button>
+                )}
+                <button 
+                  onClick={() => setShowLinkModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-studio-border text-studio-sub text-[10px] font-black hover:bg-studio-bg transition-all"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={handleSaveLink}
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-white text-[10px] font-black shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all"
+                >
+                  确认
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
